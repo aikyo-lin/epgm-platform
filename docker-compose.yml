@@ -30,6 +30,11 @@ services:
       - EMQX_ALLOW_ANONYMOUS=true
     volumes:
       - emqx_data:/opt/emqx/data
+    healthcheck:
+      test: ["CMD", "/opt/emqx/bin/emqx", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   # ----------------------------------------------------------------------------
   # 2. Redis: 实时状态缓存与任务队列 Broker
@@ -43,6 +48,11 @@ services:
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   # ----------------------------------------------------------------------------
   # 3. PostgreSQL: 关系统计数据与全局知识图谱存储
@@ -59,6 +69,11 @@ services:
       - POSTGRES_DB=epgm_knowledge
     volumes:
       - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U epgm_admin -d epgm_knowledge"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   # ----------------------------------------------------------------------------
   # 4. FastAPI API Gateway & WebSocket 广播服务
@@ -77,9 +92,12 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - DATABASE_URL=postgresql://epgm_admin:epgm_db_password@postgres:5432/epgm_knowledge
     depends_on:
-      - emqx
-      - redis
-      - postgres
+      emqx:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 
   # ----------------------------------------------------------------------------
@@ -95,9 +113,53 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - DATABASE_URL=postgresql://epgm_admin:epgm_db_password@postgres:5432/epgm_knowledge
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     command: celery -A worker.tasks worker --loglevel=info --concurrency=4
+
+  # ----------------------------------------------------------------------------
+  # 6. MQTT Bridge: 常驻 MQTT 消息中继网关 (双路遥测缓存与图碎片入队)
+  # ----------------------------------------------------------------------------
+  mqtt-bridge:
+    build:
+      context: ./cloud
+      dockerfile: Dockerfile
+    container_name: epgm-mqtt-bridge
+    restart: always
+    environment:
+      - MQTT_BROKER_HOST=emqx
+      - MQTT_BROKER_PORT=1883
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://epgm_admin:epgm_db_password@postgres:5432/epgm_knowledge
+    depends_on:
+      emqx:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    command: python mqtt_bridge.py
+
+  # ----------------------------------------------------------------------------
+  # 7. Celery Beat: 周期性定时调度器 (长时程抑制图修剪与快照归档)
+  # ----------------------------------------------------------------------------
+  celery-beat:
+    build:
+      context: ./cloud
+      dockerfile: Dockerfile
+    container_name: epgm-celery-beat
+    restart: always
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://epgm_admin:epgm_db_password@postgres:5432/epgm_knowledge
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    command: celery -A worker.tasks beat --loglevel=info
 
 volumes:
   emqx_data:

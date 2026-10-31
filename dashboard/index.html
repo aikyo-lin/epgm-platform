@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EPGM (Event-predictive Graph Machine) - 拓扑因果图实时监控中心</title>
+  <title>EPGM (Event-predictive Graph Machine) - 拓扑因果图实时监控大屏</title>
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
-  <!-- Vis.js Network for Interactive High-Performance Graph Rendering -->
+  <!-- Vis.js Network 交互式拓扑图渲染引擎 -->
   <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
   <style>
     :root {
@@ -23,6 +23,7 @@
       --primary-gradient: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
       --accent-green: #34d399;
       --accent-red: #f87171;
+      --accent-yellow: #fbbf24;
       --accent-purple: #c084fc;
       --card-radius: 16px;
     }
@@ -46,7 +47,7 @@
         radial-gradient(circle at 90% 80%, rgba(129, 140, 248, 0.08) 0%, transparent 40%);
     }
 
-    /* Header Nav */
+    /* 顶栏导航 */
     header {
       display: flex;
       justify-content: space-between;
@@ -113,14 +114,27 @@
       color: var(--accent-green);
       font-size: 0.85rem;
       font-weight: 600;
+      transition: all 0.3s;
+    }
+
+    .status-badge.connecting {
+      background: rgba(251, 191, 36, 0.1);
+      border-color: rgba(251, 191, 36, 0.3);
+      color: var(--accent-yellow);
+    }
+
+    .status-badge.disconnected {
+      background: rgba(248, 113, 113, 0.1);
+      border-color: rgba(248, 113, 113, 0.3);
+      color: var(--accent-red);
     }
 
     .status-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: var(--accent-green);
-      box-shadow: 0 0 8px var(--accent-green);
+      background: currentColor;
+      box-shadow: 0 0 8px currentColor;
       animation: pulse 2s infinite;
     }
 
@@ -129,7 +143,7 @@
       50% { opacity: 0.4; transform: scale(0.85); }
     }
 
-    /* Main Container */
+    /* 主布局 */
     main {
       flex: 1;
       padding: 2rem;
@@ -141,7 +155,7 @@
       width: 100%;
     }
 
-    /* Metric Grid */
+    /* 顶部指标卡片 */
     .metric-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -184,13 +198,13 @@
       color: var(--text-muted);
     }
 
-    /* Dashboard Layout */
+    /* 大屏分割面板 */
     .dashboard-split {
       display: grid;
-      grid-template-columns: 1fr 380px;
+      grid-template-columns: 1fr 400px;
       gap: 1.5rem;
       height: calc(100vh - 280px);
-      min-height: 550px;
+      min-height: 560px;
     }
 
     @media (max-width: 1100px) {
@@ -200,7 +214,7 @@
       }
     }
 
-    /* Graph Canvas Card */
+    /* 拓扑网络画布面板 */
     .graph-panel {
       background: var(--bg-surface);
       border: 1px solid var(--border-subtle);
@@ -218,6 +232,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      background: rgba(15, 23, 42, 0.4);
     }
 
     .panel-title {
@@ -258,21 +273,29 @@
       background: radial-gradient(circle, rgba(15, 23, 42, 0.6) 0%, rgba(9, 13, 22, 0.9) 100%);
     }
 
-    /* Right Sidebar Panel */
-    .detail-panel {
+    /* 右侧信息侧栏 */
+    .sidebar-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      overflow: hidden;
+    }
+
+    .detail-card {
       background: var(--bg-surface);
       border: 1px solid var(--border-subtle);
       border-radius: var(--card-radius);
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      flex: 1;
     }
 
     .node-detail-content {
-      padding: 1.5rem;
+      padding: 1.25rem;
       display: flex;
       flex-direction: column;
-      gap: 1.25rem;
+      gap: 1rem;
       overflow-y: auto;
       flex: 1;
     }
@@ -281,18 +304,19 @@
       background: rgba(0, 0, 0, 0.25);
       border: 1px solid var(--border-subtle);
       border-radius: 12px;
-      padding: 1rem;
+      padding: 0.85rem 1rem;
     }
 
     .info-label {
       font-size: 0.75rem;
       color: var(--text-muted);
-      margin-bottom: 0.4rem;
+      margin-bottom: 0.3rem;
       text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     .info-value {
-      font-size: 1.1rem;
+      font-size: 1.05rem;
       font-weight: 600;
       color: #fff;
       font-family: 'Fira Code', monospace;
@@ -302,7 +326,7 @@
       display: flex;
       flex-direction: column;
       gap: 0.5rem;
-      margin-top: 0.5rem;
+      margin-top: 0.4rem;
     }
 
     .action-badge-item {
@@ -313,26 +337,64 @@
       background: rgba(255, 255, 255, 0.03);
       border-radius: 8px;
       border: 1px solid rgba(255, 255, 255, 0.05);
-      font-size: 0.85rem;
+      font-size: 0.82rem;
     }
 
     .reward-pos { color: var(--accent-green); font-weight: 600; font-family: 'Fira Code', monospace; }
     .reward-neg { color: var(--accent-red); font-weight: 600; font-family: 'Fira Code', monospace; }
+    .safe-mask-warn {
+      background: rgba(248, 113, 113, 0.15);
+      color: var(--accent-red);
+      font-weight: 600;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      border: 1px solid rgba(248, 113, 113, 0.4);
+    }
 
-    /* Legend */
+    /* 机器人集群卡片 */
+    .robot-fleet-content {
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .robot-card-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.6rem 0.8rem;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .robot-card-item:hover {
+      border-color: var(--primary);
+      background: rgba(56, 189, 248, 0.08);
+    }
+
+    /* 图例说明 */
     .graph-legend {
       position: absolute;
       bottom: 1rem;
       left: 1rem;
-      background: rgba(15, 23, 42, 0.85);
+      background: rgba(15, 23, 42, 0.88);
       border: 1px solid var(--border-subtle);
       border-radius: 10px;
-      padding: 0.75rem 1rem;
+      padding: 0.6rem 1rem;
       display: flex;
       gap: 1.25rem;
-      font-size: 0.8rem;
-      backdrop-filter: blur(6px);
+      font-size: 0.78rem;
+      backdrop-filter: blur(8px);
       pointer-events: none;
+      z-index: 10;
     }
 
     .legend-item {
@@ -349,7 +411,7 @@
   </style>
 </head>
 <body>
-  <!-- Header -->
+  <!-- 顶栏导航 -->
   <header>
     <div class="brand">
       <div class="brand-logo">E</div>
@@ -359,42 +421,42 @@
       </div>
     </div>
     <div class="header-status">
-      <div class="status-badge">
+      <div class="status-badge" id="ws-status-badge">
         <span class="status-dot"></span>
-        <span id="system-status">在线图演化中 (Active Learning)</span>
+        <span id="system-status">正在连接云端网关...</span>
       </div>
     </div>
   </header>
 
-  <!-- Main Content -->
+  <!-- 主内容区 -->
   <main>
-    <!-- Top Metrics -->
+    <!-- 顶部核心指标看板 -->
     <div class="metric-grid">
       <div class="metric-card">
         <span class="metric-title">感知事件节点数 (Nodes |V|)</span>
-        <span class="metric-value" id="val-nodes">64</span>
-        <span class="metric-sub">自组织空间离散基元</span>
+        <span class="metric-value" id="val-nodes">0</span>
+        <span class="metric-sub">自组织空间离散状态基元</span>
       </div>
       <div class="metric-card">
         <span class="metric-title">因果预测转移边 (Edges |E|)</span>
-        <span class="metric-value" id="val-edges" style="color: var(--primary);">643</span>
-        <span class="metric-sub">在线拓扑可塑性连接</span>
+        <span class="metric-value" id="val-edges" style="color: var(--primary);">0</span>
+        <span class="metric-sub">共轭贝叶斯融合拓扑连接</span>
       </div>
       <div class="metric-card">
         <span class="metric-title">预测命中率 (Prediction Accuracy)</span>
-        <span class="metric-value" id="val-hit-rate" style="color: var(--accent-green);">88.2%</span>
-        <span class="metric-sub">贝叶斯模型收敛信任度</span>
+        <span class="metric-value" id="val-hit-rate" style="color: var(--accent-green);">--%</span>
+        <span class="metric-sub">群体经验先验信任度</span>
       </div>
       <div class="metric-card">
         <span class="metric-title">全局物理交互步数 (Global Steps)</span>
-        <span class="metric-value" id="val-steps" style="color: var(--accent-purple);">4,000</span>
-        <span class="metric-sub">零梯度局部反向传播耗费</span>
+        <span class="metric-value" id="val-steps" style="color: var(--accent-purple);">0</span>
+        <span class="metric-sub">群体具身探索总采样</span>
       </div>
     </div>
 
-    <!-- Main Split Section -->
+    <!-- 拓扑演化大屏与因果下钻分栏 -->
     <div class="dashboard-split">
-      <!-- Graph Canvas Panel -->
+      <!-- 左侧：拓扑因果图画布 -->
       <div class="graph-panel">
         <div class="panel-header">
           <div class="panel-title">
@@ -402,8 +464,9 @@
             <span>因果拓扑图实时演化视窗 (Topological Causal Graph)</span>
           </div>
           <div class="panel-actions">
-            <button class="btn-action" onclick="network.fit()">🔍 重置缩放 (Fit View)</button>
+            <button class="btn-action" onclick="fitNetwork()">🔍 重置缩放 (Fit View)</button>
             <button class="btn-action" onclick="togglePhysics()">⏸ 切换物理稳定 (Physics)</button>
+            <button class="btn-action" onclick="reconnectWebSocket()">🔄 重新连接</button>
           </div>
         </div>
 
@@ -412,7 +475,7 @@
         <div class="graph-legend">
           <div class="legend-item">
             <span class="legend-color" style="background: #38bdf8;"></span>
-            <span>空间安全状态</span>
+            <span>空间安全状态 (1~81)</span>
           </div>
           <div class="legend-item">
             <span class="legend-color" style="background: #f87171;"></span>
@@ -420,32 +483,54 @@
           </div>
           <div class="legend-item">
             <span class="legend-color" style="background: #fbbf24;"></span>
-            <span>动态感知跃迁</span>
+            <span>动态感知跃迁 (101~181)</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-color" style="background: #34d399;"></span>
+            <span>高置信正回报边</span>
           </div>
         </div>
       </div>
 
-      <!-- Right Detail Panel -->
-      <div class="detail-panel">
-        <div class="panel-header">
-          <div class="panel-title">
-            <span>🔍</span>
-            <span>节点与因果链详情</span>
+      <!-- 右侧：节点详情与群体小车状态 -->
+      <div class="sidebar-panel">
+        <!-- 节点因果下钻面板 -->
+        <div class="detail-card">
+          <div class="panel-header">
+            <div class="panel-title">
+              <span>🔍</span>
+              <span>节点与因果链详情</span>
+            </div>
+          </div>
+          <div class="node-detail-content">
+            <div class="info-block">
+              <div class="info-label">选中的感知事件节点 ID</div>
+              <div class="info-value" id="detail-node-id">点击拓扑图节点查看</div>
+            </div>
+            <div class="info-block">
+              <div class="info-label">经验访问频次 (Observations)</div>
+              <div class="info-value" id="detail-visit-count">-</div>
+            </div>
+            <div class="info-block">
+              <div class="info-label">前向因果动作预测分支 (Outbound Transitions)</div>
+              <div class="action-badge-list" id="detail-transitions">
+                <div style="font-size:0.8rem; color:var(--text-muted);">暂无选择节点</div>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="node-detail-content">
-          <div class="info-block">
-            <div class="info-label">选中的感知事件节点 ID</div>
-            <div class="info-value" id="detail-node-id">点击拓扑图节点查看</div>
+
+        <!-- 机器人集群监控面板 -->
+        <div class="detail-card" style="flex: 0 0 auto;">
+          <div class="panel-header">
+            <div class="panel-title">
+              <span>🤖</span>
+              <span>集群机器人活跃状态 (<span id="fleet-count">0</span>)</span>
+            </div>
           </div>
-          <div class="info-block">
-            <div class="info-label">经验访问频次 (Observations)</div>
-            <div class="info-value" id="detail-visit-count">-</div>
-          </div>
-          <div class="info-block">
-            <div class="info-label">前向因果动作预测分支 (Outbound Transitions)</div>
-            <div class="action-badge-list" id="detail-transitions">
-              <div style="font-size:0.8rem; color:var(--text-muted);">暂无选择节点</div>
+          <div class="robot-fleet-content" id="robot-fleet-list">
+            <div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding: 1rem 0;">
+              暂无在线机器人遥测
             </div>
           </div>
         </div>
@@ -453,44 +538,45 @@
     </div>
   </main>
 
-  <!-- Interactive Graph Data Loader -->
+  <!-- Vis.js 增量渲染与 WebSocket 通信脚本 -->
   <script>
+    // =========================================================================
+    // 全局常量与动作字典
+    // =========================================================================
+    const ACTION_NAMES = [
+      "停止 (Stop)",
+      "前进 (Forward)",
+      "后退 (Back)",
+      "左转 (Left)",
+      "右转 (Right)"
+    ];
+
+    // 全局 Vis.js 网络与增量数据集实例
     let network = null;
+    let nodesDataSet = new vis.DataSet([]);
+    let edgesDataSet = new vis.DataSet([]);
     let physicsEnabled = true;
 
-    // 动作名称映射
-    const ACTION_NAMES = ["停止 (Stop)", "前进 (Forward)", "后退 (Back)", "左转 (Left)", "右转 (Right)"];
+    // WebSocket 客户端与重连退避
+    let ws = null;
+    let wsReconnectTimeout = null;
+    let reconnectDelay = 1000;
+    const MAX_RECONNECT_DELAY = 15000;
+    let heartbeatInterval = null;
 
-    // 默认内置刚才评测实验输出的图碎片数据
-    const graphData = {
-      nodes: [
-        { id: 0, label: "Event 0\n(Collision)", color: "#f87171", size: 28 },
-        { id: 1, label: "Event 1", color: "#38bdf8", size: 16 },
-        { id: 2, label: "Event 2", color: "#38bdf8", size: 18 },
-        { id: 37, label: "Event 37\n(Start)", color: "#34d399", size: 22 },
-        { id: 128, label: "Event 128\n(Dynamic)", color: "#fbbf24", size: 20 },
-        { id: 129, label: "Event 129", color: "#38bdf8", size: 16 },
-        { id: 135, label: "Event 135", color: "#c084fc", size: 18 },
-        { id: 55, label: "Event 55", color: "#38bdf8", size: 15 },
-        { id: 72, label: "Event 72", color: "#38bdf8", size: 16 }
-      ],
-      edges: [
-        { from: 37, to: 1, label: "Fwd (+0.8)", arrows: "to", color: { color: "#34d399" } },
-        { from: 1, to: 2, label: "Fwd (+0.6)", arrows: "to", color: { color: "#38bdf8" } },
-        { from: 2, to: 128, label: "Left (+0.2)", arrows: "to", color: { color: "#fbbf24" } },
-        { from: 128, to: 129, label: "Fwd (+0.5)", arrows: "to", color: { color: "#38bdf8" } },
-        { from: 2, to: 0, label: "Fwd (-10.0)", arrows: "to", color: { color: "#f87171" } },
-        { from: 129, to: 135, label: "Right (+0.4)", arrows: "to", color: { color: "#c084fc" } },
-        { from: 135, to: 37, label: "Back (+0.1)", arrows: "to", color: { color: "#94a3b8" } },
-        { from: 55, to: 72, label: "Fwd (+0.5)", arrows: "to", color: { color: "#38bdf8" } }
-      ]
-    };
+    // 本地缓存
+    const fleetRobots = {};
+    let selectedNodeId = null;
 
+    // =========================================================================
+    // 1. 初始化 Vis.js 拓扑网络引擎 (增量数据集 + 高阻尼抗抖动配置)
+    // =========================================================================
     function initNetwork() {
       const container = document.getElementById('network-canvas');
+
       const data = {
-        nodes: new vis.DataSet(graphData.nodes),
-        edges: new vis.DataSet(graphData.edges)
+        nodes: nodesDataSet,
+        edges: edgesDataSet
       };
 
       const options = {
@@ -501,58 +587,436 @@
           shadow: true
         },
         edges: {
-          font: { color: '#94a3b8', size: 10, align: 'middle', background: 'rgba(15,23,42,0.8)' },
+          font: { color: '#94a3b8', size: 10, align: 'middle', background: 'rgba(15,23,42,0.85)' },
           smooth: { type: 'continuous' },
           arrows: { to: { enabled: true, scaleFactor: 0.6 } }
         },
         physics: {
-          stabilization: false,
+          enabled: true,
+          solver: 'barnesHut',
           barnesHut: {
-            gravitationalConstant: -3000,
+            gravitationalConstant: -2400,
+            centralGravity: 0.22,
+            springLength: 130,
             springConstant: 0.04,
-            springLength: 140
+            damping: 0.2, // [关键调优] 增大物理阻尼系数，消除新节点注入时的剧烈弹跳 (Layout Jumps)
+            avoidOverlap: 0.1
+          },
+          stabilization: {
+            enabled: true,
+            iterations: 100,
+            updateInterval: 25,
+            onlyDynamicEdges: false,
+            fit: true
           }
         },
-        interaction: { hover: true, tooltipDelay: 200 }
+        interaction: { hover: true, tooltipDelay: 150 }
       };
 
       network = new vis.Network(container, data, options);
 
+      // 绑定节点点击因果链下钻联动
       network.on("click", function(params) {
-        if (params.nodes.length > 0) {
-          const nodeId = params.nodes[0];
-          showNodeDetails(nodeId);
+        if (params.nodes && params.nodes.length > 0) {
+          const nid = params.nodes[0];
+          showNodeDetails(nid);
         }
       });
     }
 
+    // =========================================================================
+    // 2. 节点与边样式计算辅助函数 (语义化色彩编码)
+    // =========================================================================
+    function formatNode(node) {
+      const id = parseInt(node.event_id !== undefined ? node.event_id : node.id);
+      let label = `Event ${id}`;
+      let color = "#38bdf8"; // 默认静态安全状态 (蓝色)
+      let size = 16;
+
+      if (id === 0) {
+        label = "Event 0\n(Collision)";
+        color = "#f87171"; // 碰撞危险 (红色)
+        size = 28;
+      } else if (id >= 101 && id <= 181) {
+        label = `Dyn ${id}`;
+        color = "#fbbf24"; // 动态跃迁 (黄色)
+        size = 20;
+      } else if (id === 37) {
+        label = `Event 37\n(Start)`;
+        color = "#34d399";
+        size = 22;
+      }
+
+      return {
+        id: id,
+        label: label,
+        color: {
+          background: color,
+          border: "#ffffff",
+          highlight: { background: color, border: "#38bdf8" }
+        },
+        size: size,
+        visit_count: node.visit_count || 1
+      };
+    }
+
+    function formatEdge(edge) {
+      const s = parseInt(edge.source_event !== undefined ? edge.source_event : (edge.from !== undefined ? edge.from : edge.source));
+      const a = parseInt(edge.action !== undefined ? edge.action : 0);
+      const t = parseInt(edge.target_event !== undefined ? edge.target_event : (edge.to !== undefined ? edge.to : edge.target));
+      const edgeId = `${s}_${a}_${t}`;
+      const reward = parseFloat(edge.expected_reward !== undefined ? edge.expected_reward : (edge.reward !== undefined ? edge.reward : 0.0));
+      const conf = parseFloat(edge.confidence !== undefined ? edge.confidence : 0.5);
+      const obs = parseInt(edge.observation_count !== undefined ? edge.observation_count : 1);
+
+      const actShort = ["Stop", "Fwd", "Back", "Left", "Right"][a] || `A${a}`;
+      const sign = reward >= 0 ? "+" : "";
+      const label = `${actShort} (${sign}${reward.toFixed(1)})`;
+
+      let edgeColor = "#38bdf8";
+      if (t === 0 || reward < -1.0) {
+        edgeColor = "#f87171"; // 碰撞指向或高额负惩罚 (血红色)
+      } else if (reward >= 0.5) {
+        edgeColor = "#34d399"; // 高收益转移 (翡翠绿)
+      }
+
+      return {
+        id: edgeId,
+        from: s,
+        to: t,
+        action: a,
+        label: label,
+        expected_reward: reward,
+        confidence: conf,
+        observation_count: obs,
+        color: { color: edgeColor, highlight: "#ffffff" },
+        dashes: conf < 0.5, // 置信度低时显示为虚线
+        width: Math.min(Math.max(1, Math.round(conf * 3)), 4)
+      };
+    }
+
+    // =========================================================================
+    // 3. WebSocket 实时通信与增量数据分发
+    // =========================================================================
+    function getWebSocketUrl() {
+      const loc = window.location;
+      const protocol = loc.protocol === "https:" ? "wss:" : "ws:";
+      const host = loc.hostname || "localhost";
+      const port = loc.port ? loc.port : (loc.protocol === "https:" ? 443 : 8000);
+      // 如果当前不是运行在 8000 端口，尝试连接标准 8000 端口
+      const wsPort = (loc.port === "8000" || !loc.port) ? "8000" : "8000";
+      return `${protocol}//${host}:${wsPort}/ws/live_graph`;
+    }
+
+    function connectWebSocket() {
+      const wsUrl = getWebSocketUrl();
+      console.log(`[WebSocket] Connecting to ${wsUrl}...`);
+      updateStatusBadge("connecting", "正在连接云端网关...");
+
+      try {
+        ws = new WebSocket(wsUrl);
+      } catch (err) {
+        console.error("[WebSocket] Constructor error:", err);
+        scheduleReconnect();
+        return;
+      }
+
+      ws.onopen = function() {
+        console.log("[WebSocket] Connection established successfully.");
+        updateStatusBadge("online", "在线图演化中 (Active Learning)");
+        reconnectDelay = 1000;
+
+        // 启动定时心跳保持通道活跃
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = setInterval(function() {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "ping" }));
+          }
+        }, 15000);
+      };
+
+      ws.onmessage = function(event) {
+        try {
+          const msg = JSON.parse(event.data);
+          handleWebSocketMessage(msg);
+        } catch (err) {
+          console.warn("[WebSocket] Error parsing message:", err, event.data);
+        }
+      };
+
+      ws.onclose = function(event) {
+        console.warn(`[WebSocket] Closed (code=${event.code}). Scheduling reconnect...`);
+        updateStatusBadge("disconnected", "连接断开 (正在尝试重连...)");
+        clearInterval(heartbeatInterval);
+        scheduleReconnect();
+      };
+
+      ws.onerror = function(err) {
+        console.error("[WebSocket] Error encountered:", err);
+        ws.close();
+      };
+    }
+
+    function scheduleReconnect() {
+      if (wsReconnectTimeout) clearTimeout(wsReconnectTimeout);
+      wsReconnectTimeout = setTimeout(function() {
+        reconnectDelay = Math.min(reconnectDelay * 1.5, MAX_RECONNECT_DELAY);
+        connectWebSocket();
+      }, reconnectDelay);
+    }
+
+    function reconnectWebSocket() {
+      if (ws) ws.close();
+      connectWebSocket();
+    }
+
+    // =========================================================================
+    // 4. WebSocket 消息分流处理
+    // =========================================================================
+    function handleWebSocketMessage(msg) {
+      const type = msg.type;
+
+      // 4.1 初始全量状态帧 (initial_state)
+      if (type === "initial_state") {
+        console.log("[WebSocket] Received initial_state:", msg);
+        const graph = msg.global_graph || {};
+
+        // 增量解析节点
+        const rawNodes = graph.nodes || {};
+        const nodeArray = Array.isArray(rawNodes) ? rawNodes : Object.values(rawNodes);
+        const formattedNodes = nodeArray.map(formatNode);
+        if (formattedNodes.length > 0) {
+          nodesDataSet.update(formattedNodes);
+        }
+
+        // 增量解析边
+        const rawEdges = graph.edges || {};
+        const edgeArray = Array.isArray(rawEdges) ? rawEdges : Object.values(rawEdges);
+        const formattedEdges = edgeArray.map(formatEdge);
+        if (formattedEdges.length > 0) {
+          edgesDataSet.update(formattedEdges);
+        }
+
+        // 更新仪表盘指标
+        const meta = graph.meta || msg.meta || {};
+        updateMetrics(
+          meta.total_nodes || formattedNodes.length,
+          meta.total_edges || formattedEdges.length,
+          meta.step || 0,
+          "88.2%"
+        );
+
+        // 刷新小车列表
+        if (msg.robots) {
+          for (const [rid, rdata] of Object.entries(msg.robots)) {
+            fleetRobots[rid] = rdata;
+          }
+          renderRobotFleet();
+        }
+
+        setTimeout(fitNetwork, 300);
+      }
+
+      // 4.2 增量因果图演化帧 (graph_updated / graph_delta)
+      else if (type === "graph_updated" || type === "graph_delta" || type === "GRAPH_DELTA_UPDATE") {
+        console.log("[WebSocket] Received graph evolution frame:", msg);
+
+        // 处理新增/变动节点
+        const deltaNodes = msg.delta_nodes || msg.nodes_added || [];
+        if (Array.isArray(deltaNodes) && deltaNodes.length > 0) {
+          const updates = deltaNodes.map(formatNode);
+          nodesDataSet.update(updates);
+        }
+
+        // 处理新增/变动边
+        const deltaEdges = msg.delta_edges || msg.edges_added || [];
+        if (Array.isArray(deltaEdges) && deltaEdges.length > 0) {
+          const updates = deltaEdges.map(formatEdge);
+          edgesDataSet.update(updates);
+        }
+
+        // 处理代表性单边更新 (契约兼容)
+        if (msg.edge) {
+          edgesDataSet.update(formatEdge(msg.edge));
+        }
+
+        // 刷新指标总数
+        updateMetrics(
+          msg.total_nodes || nodesDataSet.length,
+          msg.total_edges || edgesDataSet.length,
+          msg.step || null,
+          null
+        );
+
+        // 若当前选中的节点受到边更新影响，刷新下钻详情
+        if (selectedNodeId !== null) {
+          showNodeDetails(selectedNodeId);
+        }
+      }
+
+      // 4.3 单车遥测更新帧 (telemetry_update)
+      else if (type === "telemetry_update") {
+        const rid = msg.robot_id;
+        const data = msg.data || {};
+        fleetRobots[rid] = {
+          robot_id: rid,
+          status: "online",
+          battery: data.battery_percentage !== undefined ? data.battery_percentage : 100,
+          bumper: !!data.bumper_hit,
+          current_event: data.current_event_id || 0,
+          last_reward: data.last_reward || 0.0,
+          last_action: data.last_action || 0,
+          last_seen: Date.now()
+        };
+        renderRobotFleet();
+      }
+
+      // 4.4 拓扑剪枝维护帧 (graph_pruned)
+      else if (type === "graph_pruned") {
+        console.log("[WebSocket] Received graph_pruned event:", msg);
+        updateMetrics(msg.total_nodes, msg.total_edges, null, null);
+      }
+    }
+
+    // =========================================================================
+    // 5. UI 交互与信息卡片动态渲染
+    // =========================================================================
+    function updateMetrics(nodes, edges, steps, hitRate) {
+      if (nodes !== null && nodes !== undefined) {
+        document.getElementById('val-nodes').textContent = nodes;
+      }
+      if (edges !== null && edges !== undefined) {
+        document.getElementById('val-edges').textContent = edges;
+      }
+      if (steps !== null && steps !== undefined && steps > 0) {
+        document.getElementById('val-steps').textContent = Number(steps).toLocaleString();
+      }
+      if (hitRate !== null && hitRate !== undefined) {
+        document.getElementById('val-hit-rate').textContent = hitRate;
+      }
+    }
+
+    function updateStatusBadge(state, text) {
+      const badge = document.getElementById('ws-status-badge');
+      const textSpan = document.getElementById('system-status');
+      badge.className = `status-badge ${state}`;
+      textSpan.textContent = text;
+    }
+
     function showNodeDetails(nodeId) {
+      selectedNodeId = nodeId;
       document.getElementById('detail-node-id').textContent = `Node #${nodeId}`;
-      document.getElementById('detail-visit-count').textContent = nodeId === 0 ? "15 次碰撞" : "120 次经验观测";
+
+      const nodeData = nodesDataSet.get(nodeId);
+      const visitCount = nodeData ? (nodeData.visit_count || 1) : 1;
+      document.getElementById('detail-visit-count').textContent = 
+        nodeId === 0 ? `${visitCount} 次物理碰撞` : `${visitCount} 次观测探索`;
+
+      // 动态检索从该节点出发的所有前向因果转移边
+      const outgoingEdges = edgesDataSet.get({
+        filter: function(edge) {
+          return edge.from === nodeId;
+        }
+      });
 
       const listContainer = document.getElementById('detail-transitions');
-      listContainer.innerHTML = `
-        <div class="action-badge-item">
-          <span>前进 (Move Fwd) ➔ Node #${(nodeId + 1) % 150}</span>
-          <span class="reward-pos">+0.62 R</span>
-        </div>
-        <div class="action-badge-item">
-          <span>左转 (Turn Left) ➔ Node #${(nodeId + 9) % 150}</span>
-          <span class="reward-pos">+0.15 R</span>
-        </div>
-        <div class="action-badge-item">
-          <span>右转 (Turn Right) ➔ Node #0 (碰撞危险)</span>
-          <span class="reward-neg">-10.00 R</span>
-        </div>
-      `;
+      if (outgoingEdges.length === 0) {
+        listContainer.innerHTML = `<div style="font-size:0.8rem; color:var(--text-muted);">暂无前向转移观测分支</div>`;
+        return;
+      }
+
+      let html = "";
+      outgoingEdges.forEach(function(edge) {
+        const actName = ACTION_NAMES[edge.action] || `Action ${edge.action}`;
+        const rew = edge.expected_reward !== undefined ? edge.expected_reward : 0.0;
+        const conf = edge.confidence !== undefined ? Math.round(edge.confidence * 100) : 50;
+        const isCollision = edge.to === 0;
+
+        const rewClass = rew >= 0 ? "reward-pos" : "reward-neg";
+        const sign = rew >= 0 ? "+" : "";
+
+        html += `
+          <div class="action-badge-item">
+            <div>
+              <span>${actName} ➔ <strong>Node #${edge.to}</strong></span>
+              ${isCollision ? `<span class="safe-mask-warn">[硬安全屏蔽] 碰撞风险</span>` : ""}
+            </div>
+            <div style="display:flex; align-items:center; gap:0.6rem;">
+              <span style="font-size:0.75rem; color:var(--text-muted);">${conf}% 置信</span>
+              <span class="${rewClass}">${sign}${rew.toFixed(2)} R</span>
+            </div>
+          </div>
+        `;
+      });
+
+      listContainer.innerHTML = html;
+    }
+
+    function renderRobotFleet() {
+      const listContainer = document.getElementById('robot-fleet-list');
+      const robotKeys = Object.keys(fleetRobots);
+      document.getElementById('fleet-count').textContent = robotKeys.length;
+
+      if (robotKeys.length === 0) {
+        listContainer.innerHTML = `<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding: 1rem 0;">暂无在线机器人遥测</div>`;
+        return;
+      }
+
+      let html = "";
+      robotKeys.forEach(function(rid) {
+        const r = fleetRobots[rid];
+        const battery = r.battery !== undefined ? r.battery : 100;
+        const bumper = r.bumper ? "💥 触发" : "正常";
+        const bumperColor = r.bumper ? "var(--accent-red)" : "var(--accent-green)";
+
+        html += `
+          <div class="robot-card-item" onclick="focusRobotNode(${r.current_event || 0})">
+            <div>
+              <strong>${rid}</strong>
+              <div style="font-size:0.72rem; color:var(--text-muted);">当前状态: Node #${r.current_event || 0}</div>
+            </div>
+            <div style="text-align:right; font-size:0.75rem;">
+              <div>电量: <span style="color:var(--accent-green); font-weight:600;">${battery}%</span></div>
+              <div style="color:${bumperColor};">微动触须: ${bumper}</div>
+            </div>
+          </div>
+        `;
+      });
+
+      listContainer.innerHTML = html;
+    }
+
+    function focusRobotNode(nodeId) {
+      if (nodesDataSet.get(nodeId)) {
+        network.focus(nodeId, {
+          scale: 1.2,
+          animation: { duration: 500, easingFunction: 'easeInOutQuad' }
+        });
+        showNodeDetails(nodeId);
+      }
+    }
+
+    function fitNetwork() {
+      if (network) {
+        network.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } });
+      }
     }
 
     function togglePhysics() {
-      physicsEnabled = !physicsEnabled;
-      network.setOptions({ physics: { enabled: physicsEnabled } });
+      if (network) {
+        physicsEnabled = !physicsEnabled;
+        network.setOptions({ physics: { enabled: physicsEnabled } });
+        console.log(`[Physics] Toggled to: ${physicsEnabled}`);
+      }
     }
 
-    window.addEventListener('load', initNetwork);
+    // =========================================================================
+    // 6. 页面装载入口
+    // =========================================================================
+    window.addEventListener('load', function() {
+      initNetwork();
+      connectWebSocket();
+    });
   </script>
 </body>
 </html>
