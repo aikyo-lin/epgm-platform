@@ -253,7 +253,9 @@ def fuse_graph_deltas(
 
                     # 加权更新样本均值
                     new_n = old_n + delta_n
-                    new_r = (old_r * old_n + delta_r * delta_n) / new_n
+                    # [ZH] 防御性加固：当累积观测数与增量观测数均为 0 时防止 ZeroDivisionError (防范 CH-01 漏洞)
+                    # [EN] Defensive hardening: guard division by zero when new_n is 0
+                    new_r = (old_r * old_n + delta_r * delta_n) / max(new_n, 1) if new_n > 0 else 0.0
 
                     # 指数饱和置信度与认知不确定度
                     new_conf = 1.0 - math.exp(-CONFIDENCE_LAMBDA * new_n)

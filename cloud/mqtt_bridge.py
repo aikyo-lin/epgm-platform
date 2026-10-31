@@ -187,7 +187,11 @@ class EPGMMQTTBridge:
         """
         # 1. 尝试 JSON 解码
         try:
-            return json.loads(raw_payload.decode("utf-8"))
+            data = json.loads(raw_payload.decode("utf-8"))
+            if isinstance(data, dict):
+                return data
+            logger.warning(f"JSON telemetry payload is not a dictionary: {type(data)}")
+            return None
         except (UnicodeDecodeError, json.JSONDecodeError):
             pass
 
@@ -238,9 +242,15 @@ class EPGMMQTTBridge:
         # 1. 尝试 JSON 解码
         try:
             delta = json.loads(raw_payload.decode("utf-8"))
-            if "robot_id" not in delta:
-                delta["robot_id"] = robot_id
-            return delta
+            # [ZH] 基础类型防护：若 JSON 解码为非字典基元（如 None, int, bool），安全拒绝 (防范 CH-03 漏洞)
+            # [EN] Primitive JSON guard: reject if payload is not a dict
+            if isinstance(delta, dict):
+                if "robot_id" not in delta:
+                    delta["robot_id"] = robot_id
+                return delta
+            else:
+                logger.warning(f"JSON graph delta payload is not a dictionary: {type(delta)}")
+                return None
         except (UnicodeDecodeError, json.JSONDecodeError):
             pass
 
@@ -250,7 +260,17 @@ class EPGMMQTTBridge:
                 ver, raw_id, seq_id, edge_count, step_index = struct.unpack(
                     DELTA_HEADER_FORMAT, raw_payload[:DELTA_HEADER_SIZE]
                 )
+                # [ZH] 协议混淆防御：严格校验协议版本与机器人标识合法性，防止破损 ASCII JSON 被误解析为二进制 (防范 CH-02 漏洞)
+                # [EN] Protocol confusion defense: strictly validate ver == 1 and printable robot_id
+                if ver != 1:
+                    logger.warning(f"Invalid protocol version for binary graph delta: ver={ver}")
+                    return None
+
                 parsed_robot_id = raw_id.decode("utf-8", errors="ignore").rstrip("\x00") or robot_id
+                # 校验 ID 是否由合法可打印 ASCII 字符组成且非空
+                if not parsed_robot_id or not all(32 <= ord(c) <= 126 for c in parsed_robot_id):
+                    logger.warning(f"Invalid or non-printable robot_id in binary delta header: {raw_id!r}")
+                    return None
 
                 edges = []
                 offset = DELTA_HEADER_SIZE
@@ -290,7 +310,9 @@ class EPGMMQTTBridge:
         [EN] Process robot high-frequency physical telemetry stream.
         """
         data = self.unpack_telemetry(raw_payload)
-        if not data:
+        # [ZH] 区分 None 与空字典：仅在反序列化失败 (None) 时退出，允许保留心跳空字典 {} (防范 CH-04 漏洞)
+        # [EN] Explicit check: only return on None, allow empty dict {} to refresh heartbeat
+        if data is None:
             return
 
         now_ms = int(time.time() * 1000)

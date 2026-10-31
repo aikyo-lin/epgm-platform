@@ -136,26 +136,43 @@ uint8_t epgm_infer_action(const epgm_runtime_t *rt, uint16_t current_event) {
     for (uint8_t a = 0; a < EPGM_ACTION_DIM; ++a) {
         int32_t score = 0;
         bool found = false;
+        bool has_collision_hazard = false;
+        int32_t total_reward_q8 = 0;
+        uint32_t match_count = 0;
+        uint32_t min_obs = 0xFFFFFFFF;
 
-        // 遍历所有活跃因果边
+        // [ZH] 遍历所有活跃因果边，消除早退遮蔽漏洞 (防范 Finding 1.1 缺陷)
+        // [EN] Traverse all active edges to prevent early-break masking of collision hazard
         for (uint16_t i = 0; i < rt->active_edge_count; ++i) {
             const epgm_edge_entry_t *edge = &rt->edges[i];
             if (edge->is_active && edge->source_event == current_event && edge->action == a) {
                 found = true;
-                score = (int32_t)edge->expected_reward_q8;
-                // 若预测发生碰撞 (target == 0)，施加致命扣分规避
-                if (edge->target_event == 0) {
-                    score -= (10 << 8); // -10.0 in Q8.8
+                match_count++;
+                total_reward_q8 += (int32_t)edge->expected_reward_q8;
+                if (edge->observation_count < min_obs) {
+                    min_obs = edge->observation_count;
                 }
-                // 不确定性好奇心奖励: 观测越少探索奖励越高
-                int32_t curiosity_bonus = (256 * 2) / (edge->observation_count + 1);
-                score += curiosity_bonus;
-                break;
+                // 若任意同源因果分支指向碰撞事件 (target == 0)，置位危险标志
+                if (edge->target_event == 0) {
+                    has_collision_hazard = true;
+                }
             }
         }
 
-        // 若动作为完全未探索状态，赋予高好奇心激励
-        if (!found) {
+        if (found) {
+            // 计算匹配分支的平均预期回报
+            score = total_reward_q8 / (int32_t)match_count;
+
+            // 若存在任何碰撞危险分支，执行硬安全扣分/遮蔽惩罚 (-10.0 in Q8.8)
+            if (has_collision_hazard) {
+                score -= (10 << 8); // -2560
+            }
+
+            // 好奇心探索奖励：以最小观测次数激励充分探索
+            int32_t curiosity_bonus = (256 * 2) / (min_obs + 1);
+            score += curiosity_bonus;
+        } else {
+            // 若动作为完全未探索状态，赋予高好奇心激励
             score = 512; // 相当于 +2.0 好奇心激励
         }
 

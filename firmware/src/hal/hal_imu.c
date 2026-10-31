@@ -97,23 +97,26 @@ static int imu_read(hal_device_t *dev, void *buf, size_t len) {
             slip_condition = false; // 轮速为 0 时解耦车轮空转打滑标志
         }
     }
+    // [ZH] 优先判定正常匀速直线巡航工况 (防范 Finding 3.1 高速巡航误判):
+    // 根据牛顿第一定律，在平坦路面匀速巡航时加速度理论值严格为 0 (|ax| 约为 0)。
+    // 只要指令速度与实测轮速匹配 (|cmd - wheel| <= 50)，绝不可误判为打滑或堵转，立即清零计数器。
+    // [EN] Check constant-speed cruise condition first to eliminate false positive at high speed (>200mm/s)
+    else if (abs(cmd_speed - wheel_spd) <= 50) {
+        priv->stall_counter = 0;
+        slip_condition = false;
+        stall_condition = false;
+    }
     // B. 判定冰面车轮空转打滑 (Wheel Slip / Ice Skid):
-    // 轮速发生超速空转 (|wheel_spd| > 200mm/s 或 |cmd_speed| > 200mm/s)，但机身加速度缺失 (|ax| < stall_thresh)
-    // 连续 3 周期滤波确认，置位打滑标志与底盘受困标志
-    else if ((abs(wheel_spd) > 200 || abs(cmd_speed) > 200) && abs(ax) < priv->config.stall_accel_thresh_mg) {
+    // 轮速发生超速空转 (|wheel_spd| > 200mm/s 或 |cmd_speed| > 200mm/s)，且轮速与指令显著不匹配 (|cmd - wheel| > 50)，
+    // 同时机身纵向加速度缺失 (|ax| < stall_thresh)。连续 3 周期滤波确认，置位打滑与底盘受困标志
+    else if ((abs(wheel_spd) > 200 || abs(cmd_speed) > 200) &&
+             abs(cmd_speed - wheel_spd) > 50 &&
+             abs(ax) < priv->config.stall_accel_thresh_mg) {
         priv->stall_counter++;
         if (priv->stall_counter > 2) {
             slip_condition = true;
             stall_condition = true; // 包含底盘失步受困
         }
-    }
-    // C. 正常匀速直线巡航工况 (Constant-Speed Cruise 消除假阳性误报):
-    // 当速度处于标称巡航工况 (|cmd_speed| <= 200 且 |wheel_spd| <= 200)，且指令与实测轮速匹配 (|cmd - wheel| <= 50) 时，
-    // 根据牛顿第一定律，匀速巡航时加速度 dv/dt 严格为 0 (|ax| 约为 0)，绝不可误报为打滑或堵转，立即清零计数器
-    else if (abs(cmd_speed - wheel_spd) <= 50) {
-        priv->stall_counter = 0;
-        slip_condition = false;
-        stall_condition = false;
     } else {
         priv->stall_counter = 0;
     }

@@ -75,6 +75,12 @@ static int bumper_read(hal_device_t *dev, void *buf, size_t len) {
         if (mock_gpio_get_level(priv->config.pin_front_left) == 0)  raw_mask |= BUMPER_MASK_FRONT_LEFT;
         if (mock_gpio_get_level(priv->config.pin_front_right) == 0) raw_mask |= BUMPER_MASK_FRONT_RIGHT;
         if (mock_gpio_get_level(priv->config.pin_rear) == 0)        raw_mask |= BUMPER_MASK_REAR;
+    } else {
+        // [ZH] 补充 active_low == false 分支：高电平有效时采样逻辑电平 1 (防范 Finding 2.1 缺陷)
+        // [EN] Add active_low == false branch: sample high level (1) when active-high
+        if (mock_gpio_get_level(priv->config.pin_front_left) == 1)  raw_mask |= BUMPER_MASK_FRONT_LEFT;
+        if (mock_gpio_get_level(priv->config.pin_front_right) == 1) raw_mask |= BUMPER_MASK_FRONT_RIGHT;
+        if (mock_gpio_get_level(priv->config.pin_rear) == 1)        raw_mask |= BUMPER_MASK_REAR;
     }
 #endif
 
@@ -101,16 +107,20 @@ static int bumper_read(hal_device_t *dev, void *buf, size_t len) {
             priv->raw_pins_state = raw_mask;
         } else {
             // 单触须微动状态：可能受到机械弹跳 (1~3ms) 或接触毛刺干扰，启动 5ms 软件滤波
-            priv->status.bumper_mask = raw_mask; // 实时更新掩码以供上层感知
             if (priv->raw_pins_state != raw_mask) {
-                // 首次由高电平跳变为低电平，记录起始时间戳，开启消抖时间窗口
+                // 首次由释放跳变为触碰，记录起始时间戳，开启消抖时间窗口
                 priv->raw_pins_state = raw_mask;
                 priv->last_trigger_tick = now_ms;
-                // 单次毛刺尚未持续达到 5ms 消抖窗口，暂不上报 is_triggered 与 emergency_stop，有效滤除假阳性
+                // [ZH] 防御加固：消抖窗口期间隔离未确认掩码，防止单字节读取绕过消抖滤波 (防范 Finding 2.2 缺陷)
+                // [EN] Defensive hardening: do not expose unconfirmed bounce mask during debounce window
+                if (!priv->status.is_triggered) {
+                    priv->status.bumper_mask = 0;
+                }
             } else {
-                // 持续保持低电平，检查低电平持续时间是否达到或超过 debounce_ms
+                // 持续保持有效电平，检查持续时间是否达到或超过 debounce_ms
                 uint32_t elapsed = now_ms - priv->last_trigger_tick;
                 if (elapsed >= priv->config.debounce_ms) {
+                    priv->status.bumper_mask = raw_mask; // 消抖确认后方可透出掩码
                     if (!priv->status.is_triggered) {
                         priv->status.is_triggered = true;
                         priv->status.emergency_stop = true;

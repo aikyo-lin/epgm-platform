@@ -188,9 +188,18 @@ static int encoder_pid_ioctl(hal_device_t *dev, uint32_t cmd, void *arg) {
                 priv->last_left_ticks = priv->status.left_ticks;
                 priv->last_right_ticks = priv->status.right_ticks;
 
-                // 50Hz (20ms) 周期估算转速
-                priv->status.left_speed_mms = (int16_t)(d_left * 5);
-                priv->status.right_speed_mms = (int16_t)(d_right * 5);
+                // [ZH] 50Hz (20ms) 周期估算转速并执行饱和截断防御 (防范 Finding 4.1 初次脉冲溢出)
+                // [EN] Estimate speed at 50Hz and apply saturation clamping in [-2000, 2000] to prevent overflow
+                int32_t spd_left_calc = d_left * 5;
+                int32_t spd_right_calc = d_right * 5;
+                if (spd_left_calc > 2000) spd_left_calc = 2000;
+                else if (spd_left_calc < -2000) spd_left_calc = -2000;
+
+                if (spd_right_calc > 2000) spd_right_calc = 2000;
+                else if (spd_right_calc < -2000) spd_right_calc = -2000;
+
+                priv->status.left_speed_mms = (int16_t)spd_left_calc;
+                priv->status.right_speed_mms = (int16_t)spd_right_calc;
                 return HAL_OK;
             }
             return HAL_ERR_PARAM;

@@ -28,3 +28,4 @@ data/
 *.exp
 firmware/challenger_fault_fs/
 firmware/test_storage_fs/
+firmware/test_adv_fs/
