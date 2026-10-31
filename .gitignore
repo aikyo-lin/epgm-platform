@@ -19,3 +19,12 @@ data/
 .piolibdeps/
 .vscode/
 .idea/
+
+# C/C++ Host Build Artifacts
+*.obj
+*.exe
+*.dll
+*.lib
+*.exp
+firmware/challenger_fault_fs/
+firmware/test_storage_fs/
