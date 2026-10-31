@@ -1,0 +1,105 @@
+# ==============================================================================
+# [ZH] EPGM 生产级分布式云端环境 Docker Compose 编排文件
+# [EN] EPGM Production-grade Distributed Cloud Docker Compose Orchestration
+# ==============================================================================
+# 包含组件 / Included Services:
+# 1. EMQX: 高性能分布式 IoT MQTT Broker (端口 1883 / 18083)
+# 2. Redis: 内存缓存与 Celery 任务队列 Broker (端口 6379)
+# 3. PostgreSQL: 全局因果图与遥测持久化数据库 (端口 5432)
+# 4. FastAPI Gateway: API 与 WebSocket 实时大屏服务 (端口 8000)
+# 5. Celery Worker: 异步图融合与全局因果拓扑提炼工作流
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. EMQX: 分布式高并发 MQTT 消息中间件
+  # ----------------------------------------------------------------------------
+  emqx:
+    image: emqx/emqx:5.8.0
+    container_name: epgm-emqx
+    restart: always
+    ports:
+      - "1883:1883"      # MQTT 协议标准端口 (边缘机器人连接)
+      - "8083:8083"      # MQTT over WebSocket
+      - "18083:18083"    # EMQX 网页管理后台 (默认账号 admin/public)
+    environment:
+      - EMQX_DASHBOARD__DEFAULT_USERNAME=admin
+      - EMQX_DASHBOARD__DEFAULT_PASSWORD=epgm_secret
+      - EMQX_ALLOW_ANONYMOUS=true
+    volumes:
+      - emqx_data:/opt/emqx/data
+
+  # ----------------------------------------------------------------------------
+  # 2. Redis: 实时状态缓存与任务队列 Broker
+  # ----------------------------------------------------------------------------
+  redis:
+    image: redis:7.2-alpine
+    container_name: epgm-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+
+  # ----------------------------------------------------------------------------
+  # 3. PostgreSQL: 关系统计数据与全局知识图谱存储
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: epgm-postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=epgm_admin
+      - POSTGRES_PASSWORD=epgm_db_password
+      - POSTGRES_DB=epgm_knowledge
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  # ----------------------------------------------------------------------------
+  # 4. FastAPI API Gateway & WebSocket 广播服务
+  # ----------------------------------------------------------------------------
+  cloud-api:
+    build:
+      context: ./cloud
+      dockerfile: Dockerfile
+    container_name: epgm-cloud-api
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - MQTT_BROKER_HOST=emqx
+      - MQTT_BROKER_PORT=1883
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://epgm_admin:epgm_db_password@postgres:5432/epgm_knowledge
+    depends_on:
+      - emqx
+      - redis
+      - postgres
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ----------------------------------------------------------------------------
+  # 5. Celery Worker: 分布式图碎片聚合与全局拓扑对齐工作流
+  # ----------------------------------------------------------------------------
+  celery-worker:
+    build:
+      context: ./cloud
+      dockerfile: Dockerfile
+    container_name: epgm-celery-worker
+    restart: always
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://epgm_admin:epgm_db_password@postgres:5432/epgm_knowledge
+    depends_on:
+      - redis
+      - postgres
+    command: celery -A worker.tasks worker --loglevel=info --concurrency=4
+
+volumes:
+  emqx_data:
+  redis_data:
+  pg_data:

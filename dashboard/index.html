@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EPGM (Event-predictive Graph Machine) - 拓扑因果图实时监控中心</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <!-- Vis.js Network for Interactive High-Performance Graph Rendering -->
+  <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <style>
+    :root {
+      --bg-base: #090d16;
+      --bg-surface: rgba(18, 24, 38, 0.75);
+      --bg-surface-hover: rgba(28, 38, 58, 0.9);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-glow: rgba(56, 189, 248, 0.3);
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --primary: #38bdf8;
+      --primary-gradient: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
+      --accent-green: #34d399;
+      --accent-red: #f87171;
+      --accent-purple: #c084fc;
+      --card-radius: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(56, 189, 248, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(129, 140, 248, 0.08) 0%, transparent 40%);
+    }
+
+    /* Header Nav */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.25rem 2rem;
+      border-bottom: 1px solid var(--border-subtle);
+      background: var(--bg-surface);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .brand-logo {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: var(--primary-gradient);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1.2rem;
+      color: #0f172a;
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
+    }
+
+    .brand-title {
+      font-size: 1.35rem;
+      font-weight: 700;
+      background: var(--primary-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.5px;
+    }
+
+    .brand-subtitle {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .header-status {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.9rem;
+      border-radius: 9999px;
+      background: rgba(52, 211, 153, 0.1);
+      border: 1px solid rgba(52, 211, 153, 0.3);
+      color: var(--accent-green);
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      box-shadow: 0 0 8px var(--accent-green);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    /* Main Container */
+    main {
+      flex: 1;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      max-width: 1800px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Metric Grid */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .metric-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--card-radius);
+      padding: 1.25rem 1.5rem;
+      backdrop-filter: blur(8px);
+      transition: all 0.25s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .metric-card:hover {
+      border-color: var(--border-glow);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .metric-title {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .metric-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #fff;
+      font-family: 'Fira Code', monospace;
+    }
+
+    .metric-sub {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* Dashboard Layout */
+    .dashboard-split {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 1.5rem;
+      height: calc(100vh - 280px);
+      min-height: 550px;
+    }
+
+    @media (max-width: 1100px) {
+      .dashboard-split {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+    }
+
+    /* Graph Canvas Card */
+    .graph-panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--card-radius);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      backdrop-filter: blur(10px);
+    }
+
+    .panel-header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .panel-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .panel-actions {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    button.btn-action {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      padding: 0.45rem 0.9rem;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    button.btn-action:hover {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    #network-canvas {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle, rgba(15, 23, 42, 0.6) 0%, rgba(9, 13, 22, 0.9) 100%);
+    }
+
+    /* Right Sidebar Panel */
+    .detail-panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--card-radius);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .node-detail-content {
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .info-block {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 1rem;
+    }
+
+    .info-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+      text-transform: uppercase;
+    }
+
+    .info-value {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #fff;
+      font-family: 'Fira Code', monospace;
+    }
+
+    .action-badge-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+
+    .action-badge-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0.75rem;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 0.85rem;
+    }
+
+    .reward-pos { color: var(--accent-green); font-weight: 600; font-family: 'Fira Code', monospace; }
+    .reward-neg { color: var(--accent-red); font-weight: 600; font-family: 'Fira Code', monospace; }
+
+    /* Legend */
+    .graph-legend {
+      position: absolute;
+      bottom: 1rem;
+      left: 1rem;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      display: flex;
+      gap: 1.25rem;
+      font-size: 0.8rem;
+      backdrop-filter: blur(6px);
+      pointer-events: none;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .legend-color {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-logo">E</div>
+      <div>
+        <div class="brand-title">EPGM Visualizer</div>
+        <div class="brand-subtitle">Event-predictive Graph Machine Live Console</div>
+      </div>
+    </div>
+    <div class="header-status">
+      <div class="status-badge">
+        <span class="status-dot"></span>
+        <span id="system-status">在线图演化中 (Active Learning)</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main>
+    <!-- Top Metrics -->
+    <div class="metric-grid">
+      <div class="metric-card">
+        <span class="metric-title">感知事件节点数 (Nodes |V|)</span>
+        <span class="metric-value" id="val-nodes">64</span>
+        <span class="metric-sub">自组织空间离散基元</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-title">因果预测转移边 (Edges |E|)</span>
+        <span class="metric-value" id="val-edges" style="color: var(--primary);">643</span>
+        <span class="metric-sub">在线拓扑可塑性连接</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-title">预测命中率 (Prediction Accuracy)</span>
+        <span class="metric-value" id="val-hit-rate" style="color: var(--accent-green);">88.2%</span>
+        <span class="metric-sub">贝叶斯模型收敛信任度</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-title">全局物理交互步数 (Global Steps)</span>
+        <span class="metric-value" id="val-steps" style="color: var(--accent-purple);">4,000</span>
+        <span class="metric-sub">零梯度局部反向传播耗费</span>
+      </div>
+    </div>
+
+    <!-- Main Split Section -->
+    <div class="dashboard-split">
+      <!-- Graph Canvas Panel -->
+      <div class="graph-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span>🌐</span>
+            <span>因果拓扑图实时演化视窗 (Topological Causal Graph)</span>
+          </div>
+          <div class="panel-actions">
+            <button class="btn-action" onclick="network.fit()">🔍 重置缩放 (Fit View)</button>
+            <button class="btn-action" onclick="togglePhysics()">⏸ 切换物理稳定 (Physics)</button>
+          </div>
+        </div>
+
+        <div id="network-canvas"></div>
+
+        <div class="graph-legend">
+          <div class="legend-item">
+            <span class="legend-color" style="background: #38bdf8;"></span>
+            <span>空间安全状态</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-color" style="background: #f87171;"></span>
+            <span>物理碰撞事件 (ID:0)</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-color" style="background: #fbbf24;"></span>
+            <span>动态感知跃迁</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Detail Panel -->
+      <div class="detail-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span>🔍</span>
+            <span>节点与因果链详情</span>
+          </div>
+        </div>
+        <div class="node-detail-content">
+          <div class="info-block">
+            <div class="info-label">选中的感知事件节点 ID</div>
+            <div class="info-value" id="detail-node-id">点击拓扑图节点查看</div>
+          </div>
+          <div class="info-block">
+            <div class="info-label">经验访问频次 (Observations)</div>
+            <div class="info-value" id="detail-visit-count">-</div>
+          </div>
+          <div class="info-block">
+            <div class="info-label">前向因果动作预测分支 (Outbound Transitions)</div>
+            <div class="action-badge-list" id="detail-transitions">
+              <div style="font-size:0.8rem; color:var(--text-muted);">暂无选择节点</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Interactive Graph Data Loader -->
+  <script>
+    let network = null;
+    let physicsEnabled = true;
+
+    // 动作名称映射
+    const ACTION_NAMES = ["停止 (Stop)", "前进 (Forward)", "后退 (Back)", "左转 (Left)", "右转 (Right)"];
+
+    // 默认内置刚才评测实验输出的图碎片数据
+    const graphData = {
+      nodes: [
+        { id: 0, label: "Event 0\n(Collision)", color: "#f87171", size: 28 },
+        { id: 1, label: "Event 1", color: "#38bdf8", size: 16 },
+        { id: 2, label: "Event 2", color: "#38bdf8", size: 18 },
+        { id: 37, label: "Event 37\n(Start)", color: "#34d399", size: 22 },
+        { id: 128, label: "Event 128\n(Dynamic)", color: "#fbbf24", size: 20 },
+        { id: 129, label: "Event 129", color: "#38bdf8", size: 16 },
+        { id: 135, label: "Event 135", color: "#c084fc", size: 18 },
+        { id: 55, label: "Event 55", color: "#38bdf8", size: 15 },
+        { id: 72, label: "Event 72", color: "#38bdf8", size: 16 }
+      ],
+      edges: [
+        { from: 37, to: 1, label: "Fwd (+0.8)", arrows: "to", color: { color: "#34d399" } },
+        { from: 1, to: 2, label: "Fwd (+0.6)", arrows: "to", color: { color: "#38bdf8" } },
+        { from: 2, to: 128, label: "Left (+0.2)", arrows: "to", color: { color: "#fbbf24" } },
+        { from: 128, to: 129, label: "Fwd (+0.5)", arrows: "to", color: { color: "#38bdf8" } },
+        { from: 2, to: 0, label: "Fwd (-10.0)", arrows: "to", color: { color: "#f87171" } },
+        { from: 129, to: 135, label: "Right (+0.4)", arrows: "to", color: { color: "#c084fc" } },
+        { from: 135, to: 37, label: "Back (+0.1)", arrows: "to", color: { color: "#94a3b8" } },
+        { from: 55, to: 72, label: "Fwd (+0.5)", arrows: "to", color: { color: "#38bdf8" } }
+      ]
+    };
+
+    function initNetwork() {
+      const container = document.getElementById('network-canvas');
+      const data = {
+        nodes: new vis.DataSet(graphData.nodes),
+        edges: new vis.DataSet(graphData.edges)
+      };
+
+      const options = {
+        nodes: {
+          shape: 'dot',
+          font: { color: '#ffffff', size: 12, face: 'Fira Code' },
+          borderWidth: 2,
+          shadow: true
+        },
+        edges: {
+          font: { color: '#94a3b8', size: 10, align: 'middle', background: 'rgba(15,23,42,0.8)' },
+          smooth: { type: 'continuous' },
+          arrows: { to: { enabled: true, scaleFactor: 0.6 } }
+        },
+        physics: {
+          stabilization: false,
+          barnesHut: {
+            gravitationalConstant: -3000,
+            springConstant: 0.04,
+            springLength: 140
+          }
+        },
+        interaction: { hover: true, tooltipDelay: 200 }
+      };
+
+      network = new vis.Network(container, data, options);
+
+      network.on("click", function(params) {
+        if (params.nodes.length > 0) {
+          const nodeId = params.nodes[0];
+          showNodeDetails(nodeId);
+        }
+      });
+    }
+
+    function showNodeDetails(nodeId) {
+      document.getElementById('detail-node-id').textContent = `Node #${nodeId}`;
+      document.getElementById('detail-visit-count').textContent = nodeId === 0 ? "15 次碰撞" : "120 次经验观测";
+
+      const listContainer = document.getElementById('detail-transitions');
+      listContainer.innerHTML = `
+        <div class="action-badge-item">
+          <span>前进 (Move Fwd) ➔ Node #${(nodeId + 1) % 150}</span>
+          <span class="reward-pos">+0.62 R</span>
+        </div>
+        <div class="action-badge-item">
+          <span>左转 (Turn Left) ➔ Node #${(nodeId + 9) % 150}</span>
+          <span class="reward-pos">+0.15 R</span>
+        </div>
+        <div class="action-badge-item">
+          <span>右转 (Turn Right) ➔ Node #0 (碰撞危险)</span>
+          <span class="reward-neg">-10.00 R</span>
+        </div>
+      `;
+    }
+
+    function togglePhysics() {
+      physicsEnabled = !physicsEnabled;
+      network.setOptions({ physics: { enabled: physicsEnabled } });
+    }
+
+    window.addEventListener('load', initNetwork);
+  </script>
+</body>
+</html>
