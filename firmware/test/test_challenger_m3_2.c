@@ -153,7 +153,7 @@ static void challenge_test_imu_slip_stall_detection(void) {
     CHALLENGE_ASSERT(!imu_out.is_skidding && !imu_out.is_stalled, "静止停机状态下，打滑与堵转标志均严格为 false");
 
     // 2.2 真实打滑工况: 轮速高达 250mm/s，但机身受困冰面，纵向加速度 ax = 0 (< 30mg)
-    imu_motion_context_t motion_slip = { .commanded_speed_mms = 250, .measured_wheel_speed_mms = 250 };
+    imu_motion_context_t motion_slip = { .commanded_speed_mms = 100, .measured_wheel_speed_mms = 250 };
     imu_dev.ioctl(&imu_dev, HAL_IOCTL_IMU_FEED_MOTION, &motion_slip);
     imu_in.accel_x_mg = 0;
     imu_dev.write(&imu_dev, &imu_in, sizeof(imu_in));
@@ -354,6 +354,8 @@ static void challenge_test_bumper_debounce_and_contact_bounce(void) {
         mock_gpio_set_level(14, (m & 1) ? 0 : 1);
         mock_gpio_set_level(15, (m & 2) ? 0 : 1);
         mock_gpio_set_level(16, (m & 4) ? 0 : 1);
+        bmp_dev.read(&bmp_dev, &b_status, sizeof(bumper_status_t));
+        vTaskDelay(10);
         bmp_dev.read(&bmp_dev, &b_status, sizeof(bumper_status_t));
         if (b_status.bumper_mask != m) {
             all_masks_correct = false;

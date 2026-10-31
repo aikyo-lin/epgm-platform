@@ -355,9 +355,31 @@ static void test_hal_drivers(void) {
     imu_dev.init(&imu_dev, &imu_cfg);
     hal_device_register(&imu_dev);
 
-    // 注入冰面打滑合成工况: 轮速指令 250mm/s，但纵向加计 ax = 5mg (几乎无加速度)
-    imu_motion_context_t motion = { .commanded_speed_mms = 250, .measured_wheel_speed_mms = 250 };
-    imu_dev.ioctl(&imu_dev, HAL_IOCTL_IMU_FEED_MOTION, &motion);
+    // 4.3.1 验证高速匀速直线巡航工况 (防范 Finding 3.1 假阳性误报):
+    // 轮速指令 250mm/s，实测轮速 250mm/s (匹配误差 |250-250| = 0 <= 50mm/s)，纵向加计 ax = 5mg (几乎无加速度)
+    // 根据牛顿第一定律，高速巡航时严格保持零误报 (is_skidding = false, is_stalled = false)
+    imu_motion_context_t motion_cruise = { .commanded_speed_mms = 250, .measured_wheel_speed_mms = 250 };
+    imu_dev.ioctl(&imu_dev, HAL_IOCTL_IMU_FEED_MOTION, &motion_cruise);
+
+    epgm_imu_data_t cruise_imu_in;
+    memset(&cruise_imu_in, 0, sizeof(epgm_imu_data_t));
+    cruise_imu_in.accel_x_mg = 5;    // 匀速巡航无纵向加速度
+    cruise_imu_in.accel_z_mg = 1000;
+    cruise_imu_in.gyro_z_dps = 0;
+    imu_dev.write(&imu_dev, &cruise_imu_in, sizeof(epgm_imu_data_t));
+
+    epgm_imu_data_t imu_readout;
+    for (int i = 0; i < 3; ++i) {
+        imu_dev.read(&imu_dev, &imu_readout, sizeof(epgm_imu_data_t));
+    }
+    TEST_ASSERT(!imu_readout.is_skidding && !imu_readout.is_stalled,
+                "IMU 250mm/s 高速匀速巡航零误报 (is_skidding=false, is_stalled=false)");
+
+    // 4.3.2 注入真实冰面车轮空转打滑工况: 轮速指令 100mm/s，但车轮在冰面失步空转达 250mm/s (|100-250| = 150 > 50mm/s)，
+    // 且机身纵向加计 ax = 5mg (< 30mg)
+    imu_dev.ioctl(&imu_dev, HAL_IOCTL_CLEAR_FLAG, NULL);
+    imu_motion_context_t motion_slip = { .commanded_speed_mms = 100, .measured_wheel_speed_mms = 250 };
+    imu_dev.ioctl(&imu_dev, HAL_IOCTL_IMU_FEED_MOTION, &motion_slip);
 
     epgm_imu_data_t slip_imu_in;
     memset(&slip_imu_in, 0, sizeof(epgm_imu_data_t));
@@ -366,12 +388,12 @@ static void test_hal_drivers(void) {
     slip_imu_in.gyro_z_dps = 10;
     imu_dev.write(&imu_dev, &slip_imu_in, sizeof(epgm_imu_data_t));
 
-    // 连续读取 3 次触发超时计数门限
-    epgm_imu_data_t imu_readout;
+    // 连续读取 3 次触发超时计数门限 (stall_counter > 2)
     imu_dev.read(&imu_dev, &imu_readout, sizeof(epgm_imu_data_t));
     imu_dev.read(&imu_dev, &imu_readout, sizeof(epgm_imu_data_t));
     imu_dev.read(&imu_dev, &imu_readout, sizeof(epgm_imu_data_t));
-    TEST_ASSERT(imu_readout.is_skidding && imu_readout.is_stalled, "IMU 成功检出“高轮速+零加速度”车轮空转打滑与堵转状态");
+    TEST_ASSERT(imu_readout.is_skidding && imu_readout.is_stalled,
+                "IMU 成功检出“高轮速+零加速度”车轮空转打滑与堵转状态");
 
     // 4.4 I2C 多路复用器 TCA9548A 测试
     hal_device_t mux_dev;

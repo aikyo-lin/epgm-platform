@@ -334,10 +334,20 @@ static void verify_imu_cruise_and_decoupling(void) {
     EMPIRICAL_ASSERT(imu_out.is_stalled == true, "电机堵转工况下，is_stalled 准确置位为 true");
     EMPIRICAL_ASSERT(imu_out.is_skidding == false, "电机堵转工况下，is_skidding 严格为 false (打滑与堵转严格解耦)");
 
-    // 3.4 严格解耦测试 B: 车轮冰面打滑工况 (Wheel Slip)
-    // 条件: 轮速高达 250mm/s，但纵向加计无加速度 (ax=0)
+    // 3.4 严格解耦测试 B: 高速 250mm/s 匀速直线巡航与真实冰面车轮空转打滑 (Wheel Slip)
+    // 条件 B1: 高速 250mm/s 匀速直线巡航 (指令 250, 实测 250, 差值 0 <= 50, ax=0)，根据牛顿第一定律严格零误报
     imu_dev.ioctl(&imu_dev, HAL_IOCTL_CLEAR_FLAG, NULL);
-    imu_motion_context_t motion_slip = { .commanded_speed_mms = 200, .measured_wheel_speed_mms = 250 };
+    imu_motion_context_t motion_cruise_high = { .commanded_speed_mms = 250, .measured_wheel_speed_mms = 250 };
+    imu_dev.ioctl(&imu_dev, HAL_IOCTL_IMU_FEED_MOTION, &motion_cruise_high);
+    for (int i = 0; i < 5; ++i) {
+        imu_dev.read(&imu_dev, &imu_out, sizeof(imu_out));
+    }
+    EMPIRICAL_ASSERT(imu_out.is_skidding == false && imu_out.is_stalled == false,
+                     "250mm/s 高速匀速巡航严格保持零误报 (is_skidding=false, is_stalled=false)");
+
+    // 条件 B2: 真实冰面车轮空转打滑工况 (指令 100mm/s, 实测轮速高达 250mm/s, 差值 150 > 50, ax=0)
+    imu_dev.ioctl(&imu_dev, HAL_IOCTL_CLEAR_FLAG, NULL);
+    imu_motion_context_t motion_slip = { .commanded_speed_mms = 100, .measured_wheel_speed_mms = 250 };
     imu_dev.ioctl(&imu_dev, HAL_IOCTL_IMU_FEED_MOTION, &motion_slip);
 
     for (int i = 0; i < 5; ++i) {
