@@ -13,13 +13,13 @@
   <!-- Vis.js Network 交互式因果拓扑图渲染引擎 -->
   <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
 
-  <!-- Three.js r160 核心渲染器及官方扩展组件 -->
-  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-  <script src="https://unpkg.com/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
-  <script src="https://unpkg.com/three@0.160.0/examples/js/controls/TransformControls.js"></script>
-  <script src="https://unpkg.com/three@0.160.0/examples/js/loaders/OBJLoader.js"></script>
-  <script src="https://unpkg.com/three@0.160.0/examples/js/loaders/STLLoader.js"></script>
-  <script src="https://unpkg.com/three@0.160.0/examples/js/loaders/GLTFLoader.js"></script>
+  <!-- Three.js 核心渲染器及官方扩展组件 (基于稳定 jsDelivr CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 
   <!-- Phase D Studio & Digital Twin 模块脚本 -->
   <script src="js/studio_3d.js"></script>
@@ -1754,7 +1754,12 @@
         window.TwinSync.init();
       }
 
-      // 5. 连接 WebSocket 网关
+      // 5. 初始加载经典攻坡与台阶 3D 挑战场景 (对齐 Phase D 预设)
+      if (window.SceneIO) {
+        window.SceneIO.loadPresetScene('stairs_ramp');
+      }
+
+      // 6. 连接 WebSocket 网关
       connectWebSocket();
     });
   </script>

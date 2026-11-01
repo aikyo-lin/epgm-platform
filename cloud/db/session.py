@@ -16,17 +16,32 @@ logger = logging.getLogger("DatabaseSession")
 # 默认读取环境变量，支持本地开发与容器化部署
 raw_db_url = os.getenv("DATABASE_URL", "")
 
-if not raw_db_url:
-    # 未指定时自适应检测可用的驱动
+
+def _is_pg_port_reachable(host: str = "localhost", port: int = 5432, timeout: float = 0.3) -> bool:
+    """快速探测 PostgreSQL 端口是否开放，避免在本地无 Docker 容器时长时间挂起"""
+    import socket
     try:
-        import psycopg2
-        raw_db_url = "postgresql://epgm_admin:epgm_db_password@localhost:5432/epgm_knowledge"
-    except ImportError:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except Exception:
+        return False
+
+
+if not raw_db_url:
+    # 未指定时自适应检测可用的驱动与服务
+    if _is_pg_port_reachable():
         try:
-            import psycopg
-            raw_db_url = "postgresql+psycopg://epgm_admin:epgm_db_password@localhost:5432/epgm_knowledge"
+            import psycopg2
+            raw_db_url = "postgresql://epgm_admin:epgm_db_password@localhost:5432/epgm_knowledge"
         except ImportError:
-            raw_db_url = "sqlite:///epgm_knowledge.db"
+            try:
+                import psycopg
+                raw_db_url = "postgresql+psycopg://epgm_admin:epgm_db_password@localhost:5432/epgm_knowledge"
+            except ImportError:
+                raw_db_url = "sqlite:///epgm_knowledge.db"
+    else:
+        logger.info("Local PostgreSQL (port 5432) is offline. Using local SQLite persistence: epgm_knowledge.db")
+        raw_db_url = "sqlite:///epgm_knowledge.db"
 else:
     # 环境变量指定了 postgresql:// 但未装 psycopg2 时，自适应降级 psycopg3 或 sqlite
     if raw_db_url.startswith("postgresql://") and not raw_db_url.startswith("postgresql+"):
@@ -37,7 +52,7 @@ else:
                 import psycopg
                 raw_db_url = raw_db_url.replace("postgresql://", "postgresql+psycopg://", 1)
             except ImportError:
-                logger.warning("No PostgreSQL driver found (neither psycopg2 nor psycopg). Falling back to SQLite.")
+                logger.warning("No PostgreSQL driver found. Falling back to SQLite.")
                 raw_db_url = "sqlite:///epgm_knowledge.db"
 
 DATABASE_URL = raw_db_url

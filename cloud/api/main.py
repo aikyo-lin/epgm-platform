@@ -55,11 +55,39 @@ DATABASE_URL = os.getenv(
 )
 
 # 内存回退状态存储 (用于无外部依赖时的开发或单机测试)
-connected_robots: Dict[str, Dict[str, Any]] = {}
+connected_robots: Dict[str, Dict[str, Any]] = {
+    "sim_bot_01": {
+        "robot_id": "sim_bot_01",
+        "name": "EPGM Virtual Explorer #01",
+        "status": "online",
+        "battery": 96,
+        "bumper": False,
+        "current_event": 37,
+        "last_reward": 1.2,
+        "last_action": 1,
+        "last_seen": int(time.time() * 1000),
+        "pose": {"x": 0.0, "y": 0.05, "z": 0.0, "yaw": 0.0, "pitch": 0.0, "roll": 0.0},
+    }
+}
 in_memory_global_graph: Dict[str, Any] = {
-    "meta": {"step": 0, "version": 0, "total_nodes": 0, "total_edges": 0},
-    "nodes": {},
-    "edges": {},
+    "meta": {"step": 420, "version": 1, "total_nodes": 6, "total_edges": 7},
+    "nodes": {
+        "37": {"event_id": 37, "visit_count": 142, "description": "起始安全平坦巡游状态 (Safe Flat Roaming)"},
+        "101": {"event_id": 101, "visit_count": 68, "description": "斜坡平滑仰角动力攀登 (Ramp Ascent Active)"},
+        "102": {"event_id": 102, "visit_count": 45, "description": "台阶垂直连续阶梯攻克 (Stair Step Climbing)"},
+        "103": {"event_id": 103, "visit_count": 36, "description": "拱桥高位平稳巡游通道 (Bridge Deck Roaming)"},
+        "104": {"event_id": 104, "visit_count": 58, "description": "狭道走廊拐弯自主避障 (Corridor Turn & Evade)"},
+        "0": {"event_id": 0, "visit_count": 6, "description": "障碍物微动触碰与倾覆警戒 (Collision Hazard)"},
+    },
+    "edges": {
+        "37_1_101": {"source_event": 37, "action": 1, "target_event": 101, "confidence": 0.88, "expected_reward": 1.5, "observation_count": 68},
+        "37_1_102": {"source_event": 37, "action": 1, "target_event": 102, "confidence": 0.82, "expected_reward": 1.2, "observation_count": 45},
+        "101_1_103": {"source_event": 101, "action": 1, "target_event": 103, "confidence": 0.91, "expected_reward": 2.0, "observation_count": 36},
+        "37_3_104": {"source_event": 37, "action": 3, "target_event": 104, "confidence": 0.85, "expected_reward": 0.8, "observation_count": 58},
+        "104_1_37": {"source_event": 104, "action": 1, "target_event": 37, "confidence": 0.89, "expected_reward": 1.0, "observation_count": 54},
+        "37_1_0": {"source_event": 37, "action": 1, "target_event": 0, "confidence": 0.95, "expected_reward": -2.0, "observation_count": 6},
+        "102_4_37": {"source_event": 102, "action": 4, "target_event": 37, "confidence": 0.78, "expected_reward": 0.5, "observation_count": 32},
+    },
 }
 
 # 默认 3D 物理竞技场场景模型 (对齐 PROJECT.md 与 Phase A/C/D 标准契约)
@@ -385,6 +413,9 @@ app.add_middleware(
 dashboard_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "dashboard"))
 if os.path.exists(dashboard_dir):
     app.mount("/static", StaticFiles(directory=dashboard_dir), name="static")
+    js_dir = os.path.join(dashboard_dir, "js")
+    if os.path.exists(js_dir):
+        app.mount("/js", StaticFiles(directory=js_dir), name="js")
 
     @app.get("/")
     def serve_dashboard_root():
