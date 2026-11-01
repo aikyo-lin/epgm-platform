@@ -3,20 +3,37 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EPGM (Event-predictive Graph Machine) - 拓扑因果图实时监控大屏</title>
-  <!-- Google Fonts -->
+  <title>EPGM (Event-predictive Graph Machine) - 3D 孪生工作台与拓扑因果大屏</title>
+
+  <!-- Google Fonts: Outfit (Sans-Serif) & Fira Code (Monospace) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
-  <!-- Vis.js Network 交互式拓扑图渲染引擎 -->
+
+  <!-- Vis.js Network 交互式因果拓扑图渲染引擎 -->
   <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+
+  <!-- Three.js r160 核心渲染器及官方扩展组件 -->
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://unpkg.com/three@0.160.0/examples/js/controls/TransformControls.js"></script>
+  <script src="https://unpkg.com/three@0.160.0/examples/js/loaders/OBJLoader.js"></script>
+  <script src="https://unpkg.com/three@0.160.0/examples/js/loaders/STLLoader.js"></script>
+  <script src="https://unpkg.com/three@0.160.0/examples/js/loaders/GLTFLoader.js"></script>
+
+  <!-- Phase D Studio & Digital Twin 模块脚本 -->
+  <script src="js/studio_3d.js"></script>
+  <script src="js/editor_tools.js"></script>
+  <script src="js/twin_sync.js"></script>
+  <script src="js/scene_io.js"></script>
+
   <style>
     :root {
       --bg-base: #090d16;
-      --bg-surface: rgba(18, 24, 38, 0.75);
-      --bg-surface-hover: rgba(28, 38, 58, 0.9);
+      --bg-surface: rgba(18, 24, 38, 0.78);
+      --bg-surface-hover: rgba(28, 38, 58, 0.92);
       --border-subtle: rgba(255, 255, 255, 0.08);
-      --border-glow: rgba(56, 189, 248, 0.3);
+      --border-glow: rgba(56, 189, 248, 0.35);
       --text-main: #f1f5f9;
       --text-muted: #94a3b8;
       --primary: #38bdf8;
@@ -25,7 +42,7 @@
       --accent-red: #f87171;
       --accent-yellow: #fbbf24;
       --accent-purple: #c084fc;
-      --card-radius: 16px;
+      --card-radius: 14px;
     }
 
     * {
@@ -52,13 +69,14 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 1.25rem 2rem;
+      padding: 0.9rem 2rem;
       border-bottom: 1px solid var(--border-subtle);
       background: var(--bg-surface);
-      backdrop-filter: blur(12px);
+      backdrop-filter: blur(14px);
       position: sticky;
       top: 0;
       z-index: 50;
+      gap: 1.5rem;
     }
 
     .brand {
@@ -68,8 +86,8 @@
     }
 
     .brand-logo {
-      width: 40px;
-      height: 40px;
+      width: 38px;
+      height: 38px;
       border-radius: 10px;
       background: var(--primary-gradient);
       display: flex;
@@ -82,7 +100,7 @@
     }
 
     .brand-title {
-      font-size: 1.35rem;
+      font-size: 1.25rem;
       font-weight: 700;
       background: var(--primary-gradient);
       -webkit-background-clip: text;
@@ -91,28 +109,88 @@
     }
 
     .brand-subtitle {
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       color: var(--text-muted);
       text-transform: uppercase;
-      letter-spacing: 1px;
+      letter-spacing: 0.8px;
     }
 
-    .header-status {
+    .header-controls {
       display: flex;
       align-items: center;
-      gap: 1.5rem;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .mode-switch-group {
+      display: inline-flex;
+      background: rgba(0, 0, 0, 0.35);
+      padding: 0.25rem;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+      gap: 0.25rem;
+    }
+
+    .mode-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 0.35rem 0.85rem;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .mode-btn.active {
+      background: var(--primary);
+      color: #0f172a;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+    }
+
+    .preset-selector {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      padding: 0.4rem 0.8rem;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .btn-header {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      padding: 0.4rem 0.85rem;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.2s;
+    }
+
+    .btn-header:hover {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: var(--primary);
+      color: var(--primary);
     }
 
     .status-badge {
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
-      padding: 0.4rem 0.9rem;
+      padding: 0.35rem 0.85rem;
       border-radius: 9999px;
       background: rgba(52, 211, 153, 0.1);
       border: 1px solid rgba(52, 211, 153, 0.3);
       color: var(--accent-green);
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       font-weight: 600;
       transition: all 0.3s;
     }
@@ -143,14 +221,14 @@
       50% { opacity: 0.4; transform: scale(0.85); }
     }
 
-    /* 主布局 */
+    /* 主布局容器 */
     main {
       flex: 1;
-      padding: 2rem;
+      padding: 1.5rem 2rem;
       display: flex;
       flex-direction: column;
-      gap: 1.5rem;
-      max-width: 1800px;
+      gap: 1.25rem;
+      max-width: 1920px;
       margin: 0 auto;
       width: 100%;
     }
@@ -158,20 +236,20 @@
     /* 顶部指标卡片 */
     .metric-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 1.25rem;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
     }
 
     .metric-card {
       background: var(--bg-surface);
       border: 1px solid var(--border-subtle);
       border-radius: var(--card-radius);
-      padding: 1.25rem 1.5rem;
+      padding: 1rem 1.25rem;
       backdrop-filter: blur(8px);
       transition: all 0.25s ease;
       display: flex;
       flex-direction: column;
-      gap: 0.4rem;
+      gap: 0.3rem;
     }
 
     .metric-card:hover {
@@ -181,40 +259,158 @@
     }
 
     .metric-title {
-      font-size: 0.85rem;
+      font-size: 0.78rem;
       color: var(--text-muted);
       font-weight: 500;
     }
 
     .metric-value {
-      font-size: 2rem;
+      font-size: 1.85rem;
       font-weight: 700;
       color: #fff;
       font-family: 'Fira Code', monospace;
     }
 
     .metric-sub {
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       color: var(--text-muted);
     }
 
-    /* 大屏分割面板 */
+    /* 双视口协同分栏 (Dual-Pane Co-View Layout) */
     .dashboard-split {
       display: grid;
-      grid-template-columns: 1fr 400px;
-      gap: 1.5rem;
-      height: calc(100vh - 280px);
-      min-height: 560px;
+      grid-template-columns: 1fr 420px;
+      gap: 1.25rem;
+      min-height: 900px;
     }
 
-    @media (max-width: 1100px) {
+    @media (max-width: 1200px) {
       .dashboard-split {
         grid-template-columns: 1fr;
-        height: auto;
+        min-height: auto;
       }
     }
 
-    /* 拓扑网络画布面板 */
+    /* 左侧主协同区 (上下分屏) */
+    .dual-pane-container {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      flex: 1;
+    }
+
+    /* 上层: Three.js 3D 动力学仿真视口 */
+    #viewport-3d {
+      position: relative;
+      height: 460px;
+      min-height: 440px;
+      background: #090d16;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--card-radius);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+
+    .viewport-overlay-header {
+      position: absolute;
+      top: 0.8rem;
+      left: 1rem;
+      right: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    .viewport-tools-group {
+      pointer-events: auto;
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      background: rgba(9, 13, 22, 0.8);
+      border: 1px solid var(--border-subtle);
+      padding: 0.35rem 0.6rem;
+      border-radius: 10px;
+      backdrop-filter: blur(8px);
+    }
+
+    .btn-tool {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 0.25rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.76rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      transition: all 0.2s;
+    }
+
+    .btn-tool:hover, .btn-tool.active {
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--primary);
+    }
+
+    /* 3D 视口覆盖层 HUD 仪表 */
+    .hud-overlay {
+      position: absolute;
+      bottom: 0.8rem;
+      left: 1rem;
+      background: rgba(9, 13, 22, 0.85);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 0.6rem 0.9rem;
+      display: flex;
+      gap: 1.25rem;
+      font-size: 0.76rem;
+      backdrop-filter: blur(8px);
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    .hud-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+
+    .hud-label {
+      color: var(--text-muted);
+      font-size: 0.68rem;
+      text-transform: uppercase;
+    }
+
+    .hud-val {
+      font-family: 'Fira Code', monospace;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    #hud-alert-msg {
+      position: absolute;
+      top: 3.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(248, 113, 113, 0.9);
+      color: #fff;
+      padding: 0.4rem 1rem;
+      border-radius: 20px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      pointer-events: none;
+      z-index: 30;
+      opacity: 0;
+      transition: opacity 0.3s;
+      box-shadow: 0 0 16px rgba(248, 113, 113, 0.5);
+    }
+
+    /* 下层: Vis.js 因果拓扑图视口 */
     .graph-panel {
       background: var(--bg-surface);
       border: 1px solid var(--border-subtle);
@@ -224,10 +420,12 @@
       position: relative;
       overflow: hidden;
       backdrop-filter: blur(10px);
+      height: 420px;
+      min-height: 400px;
     }
 
     .panel-header {
-      padding: 1rem 1.5rem;
+      padding: 0.8rem 1.25rem;
       border-bottom: 1px solid var(--border-subtle);
       display: flex;
       justify-content: space-between;
@@ -236,7 +434,7 @@
     }
 
     .panel-title {
-      font-size: 1.1rem;
+      font-size: 1.05rem;
       font-weight: 600;
       display: flex;
       align-items: center;
@@ -245,16 +443,16 @@
 
     .panel-actions {
       display: flex;
-      gap: 0.75rem;
+      gap: 0.6rem;
     }
 
     button.btn-action {
       background: rgba(255, 255, 255, 0.05);
       border: 1px solid var(--border-subtle);
       color: var(--text-main);
-      padding: 0.45rem 0.9rem;
+      padding: 0.35rem 0.75rem;
       border-radius: 8px;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       cursor: pointer;
       font-weight: 500;
       transition: all 0.2s;
@@ -273,44 +471,237 @@
       background: radial-gradient(circle, rgba(15, 23, 42, 0.6) 0%, rgba(9, 13, 22, 0.9) 100%);
     }
 
-    /* 右侧信息侧栏 */
+    .graph-legend {
+      position: absolute;
+      bottom: 0.8rem;
+      left: 1rem;
+      background: rgba(15, 23, 42, 0.88);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 0.5rem 0.9rem;
+      display: flex;
+      gap: 1rem;
+      font-size: 0.75rem;
+      backdrop-filter: blur(8px);
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .legend-color {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    /* 右侧控制与详情侧栏 (多选项卡结构) */
     .sidebar-panel {
       display: flex;
       flex-direction: column;
-      gap: 1.25rem;
+      gap: 1rem;
       overflow: hidden;
     }
 
-    .detail-card {
+    .sidebar-tabs {
+      display: flex;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 0.25rem;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+      gap: 0.25rem;
+    }
+
+    .tab-btn {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 0.45rem 0.6rem;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .tab-btn.active {
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--primary);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+
+    .tab-pane {
+      display: none;
+      flex-direction: column;
+      gap: 1rem;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .tab-pane.active {
+      display: flex;
+    }
+
+    .sidebar-card {
       background: var(--bg-surface);
       border: 1px solid var(--border-subtle);
       border-radius: var(--card-radius);
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      flex: 1;
     }
 
-    .node-detail-content {
-      padding: 1.25rem;
+    .sidebar-card-body {
+      padding: 1.1rem;
       display: flex;
       flex-direction: column;
-      gap: 1rem;
-      overflow-y: auto;
-      flex: 1;
+      gap: 0.85rem;
     }
 
+    /* 3D 构件按钮网格 */
+    .palette-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.5rem;
+    }
+
+    .palette-card-btn {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 0.65rem 0.6rem;
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .palette-card-btn:hover, .palette-card-btn.active {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .palette-card-btn span.icon {
+      font-size: 1.25rem;
+    }
+
+    /* 地形雕刻笔刷控件 */
+    .brush-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .brush-modes {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.35rem;
+    }
+
+    .brush-mode-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      border-radius: 6px;
+      padding: 0.3rem 0.2rem;
+      font-size: 0.74rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .brush-mode-btn.active {
+      background: var(--primary);
+      color: #0f172a;
+      font-weight: 600;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      gap: 0.6rem;
+    }
+
+    .slider-row input[type="range"] {
+      flex: 1;
+      accent-color: var(--primary);
+    }
+
+    /* 小车出生点配置卡片 */
+    .spawn-inputs-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.4rem;
+    }
+
+    .spawn-input-box {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .spawn-input-box label {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+    }
+
+    .spawn-input-box input {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border-subtle);
+      color: #fff;
+      padding: 0.3rem;
+      border-radius: 6px;
+      font-family: 'Fira Code', monospace;
+      font-size: 0.75rem;
+      text-align: center;
+    }
+
+    /* 模型上传拖拽区 */
+    .upload-dropzone {
+      border: 2px dashed rgba(56, 189, 248, 0.3);
+      border-radius: 10px;
+      padding: 1rem;
+      text-align: center;
+      cursor: pointer;
+      background: rgba(56, 189, 248, 0.03);
+      transition: all 0.2s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .upload-dropzone:hover {
+      border-color: var(--primary);
+      background: rgba(56, 189, 248, 0.08);
+    }
+
+    /* 节点下钻详情 */
     .info-block {
       background: rgba(0, 0, 0, 0.25);
       border: 1px solid var(--border-subtle);
-      border-radius: 12px;
-      padding: 0.85rem 1rem;
+      border-radius: 10px;
+      padding: 0.75rem 0.9rem;
     }
 
     .info-label {
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       color: var(--text-muted);
-      margin-bottom: 0.3rem;
+      margin-bottom: 0.25rem;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -325,7 +716,7 @@
     .action-badge-list {
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
+      gap: 0.45rem;
       margin-top: 0.4rem;
     }
 
@@ -333,11 +724,11 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 0.5rem 0.75rem;
+      padding: 0.45rem 0.65rem;
       background: rgba(255, 255, 255, 0.03);
       border-radius: 8px;
       border: 1px solid rgba(255, 255, 255, 0.05);
-      font-size: 0.82rem;
+      font-size: 0.8rem;
     }
 
     .reward-pos { color: var(--accent-green); font-weight: 600; font-family: 'Fira Code', monospace; }
@@ -348,17 +739,17 @@
       font-weight: 600;
       padding: 0.15rem 0.4rem;
       border-radius: 4px;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       border: 1px solid rgba(248, 113, 113, 0.4);
     }
 
-    /* 机器人集群卡片 */
+    /* 群体小车列表 */
     .robot-fleet-content {
-      padding: 1rem;
+      padding: 0.85rem;
       display: flex;
       flex-direction: column;
-      gap: 0.6rem;
-      max-height: 220px;
+      gap: 0.5rem;
+      max-height: 300px;
       overflow-y: auto;
     }
 
@@ -366,11 +757,11 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 0.6rem 0.8rem;
-      background: rgba(0, 0, 0, 0.2);
+      padding: 0.55rem 0.75rem;
+      background: rgba(0, 0, 0, 0.25);
       border: 1px solid var(--border-subtle);
       border-radius: 8px;
-      font-size: 0.82rem;
+      font-size: 0.8rem;
       cursor: pointer;
       transition: all 0.2s;
     }
@@ -378,35 +769,6 @@
     .robot-card-item:hover {
       border-color: var(--primary);
       background: rgba(56, 189, 248, 0.08);
-    }
-
-    /* 图例说明 */
-    .graph-legend {
-      position: absolute;
-      bottom: 1rem;
-      left: 1rem;
-      background: rgba(15, 23, 42, 0.88);
-      border: 1px solid var(--border-subtle);
-      border-radius: 10px;
-      padding: 0.6rem 1rem;
-      display: flex;
-      gap: 1.25rem;
-      font-size: 0.78rem;
-      backdrop-filter: blur(8px);
-      pointer-events: none;
-      z-index: 10;
-    }
-
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-    }
-
-    .legend-color {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
     }
   </style>
 </head>
@@ -416,11 +778,30 @@
     <div class="brand">
       <div class="brand-logo">E</div>
       <div>
-        <div class="brand-title">EPGM Visualizer</div>
-        <div class="brand-subtitle">Event-predictive Graph Machine Live Console</div>
+        <div class="brand-title">EPGM Visualizer & 3D Studio</div>
+        <div class="brand-subtitle">Event-predictive Graph Machine Digital Twin Console</div>
       </div>
     </div>
-    <div class="header-status">
+
+    <!-- 工作台模式与场景预设控制栏 -->
+    <div class="header-controls">
+      <div class="mode-switch-group">
+        <button class="mode-btn active" id="btn-mode-twin" onclick="switchDashboardMode('twin')">🤖 3D 孪生监控</button>
+        <button class="mode-btn" id="btn-mode-studio" onclick="switchDashboardMode('studio')">🛠 3D 场景工坊</button>
+      </div>
+
+      <select class="preset-selector" id="preset-selector" onchange="onPresetSelected(this.value)">
+        <option value="" disabled selected>📂 切换经典预设场景 ▾</option>
+        <option value="flat">平坦基础竞技场 (Flat Arena)</option>
+        <option value="stairs_ramp">极速攻坡与台阶挑战 (Stairs & Ramp)</option>
+        <option value="overpass_maze">复杂立交拱桥迷宫 (Overpass & Maze)</option>
+        <option value="rugged_heightmap">极端起伏高程越野 (Rugged Terrain)</option>
+      </select>
+
+      <button class="btn-header" onclick="exportSceneJson()">💾 导出 scene.json</button>
+      <button class="btn-header" onclick="triggerSceneImport()">📂 导入 scene.json</button>
+      <input type="file" id="scene-file-input" accept=".json" style="display:none;" onchange="onSceneFilePicked(event)">
+
       <div class="status-badge" id="ws-status-badge">
         <span class="status-dot"></span>
         <span id="system-status">正在连接云端网关...</span>
@@ -435,102 +816,271 @@
       <div class="metric-card">
         <span class="metric-title">感知事件节点数 (Nodes |V|)</span>
         <span class="metric-value" id="val-nodes">0</span>
-        <span class="metric-sub">自组织空间离散状态基元</span>
+        <span class="metric-sub">空间离散状态基元</span>
       </div>
       <div class="metric-card">
         <span class="metric-title">因果预测转移边 (Edges |E|)</span>
         <span class="metric-value" id="val-edges" style="color: var(--primary);">0</span>
-        <span class="metric-sub">共轭贝叶斯融合拓扑连接</span>
+        <span class="metric-sub">贝叶斯共轭连接拓扑</span>
       </div>
       <div class="metric-card">
-        <span class="metric-title">预测命中率 (Prediction Accuracy)</span>
+        <span class="metric-title">预测命中率 (Accuracy)</span>
         <span class="metric-value" id="val-hit-rate" style="color: var(--accent-green);">--%</span>
-        <span class="metric-sub">群体经验先验信任度</span>
+        <span class="metric-sub">先验因果置信度</span>
       </div>
       <div class="metric-card">
-        <span class="metric-title">全局物理交互步数 (Global Steps)</span>
+        <span class="metric-title">全局物理交互步数 (Steps)</span>
         <span class="metric-value" id="val-steps" style="color: var(--accent-purple);">0</span>
-        <span class="metric-sub">群体具身探索总采样</span>
+        <span class="metric-sub">具身探索采样总计</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-title">3D 物理帧率 (WebGL FPS)</span>
+        <span class="metric-value" id="val-fps" style="color: var(--primary);">60</span>
+        <span class="metric-sub">GPU 独立光栅渲染循环</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-title">数字孪生同步延迟 (Latency)</span>
+        <span class="metric-value" id="val-latency" style="color: var(--accent-green);">12ms</span>
+        <span class="metric-sub">Slerp 平滑插值延迟</span>
       </div>
     </div>
 
-    <!-- 拓扑演化大屏与因果下钻分栏 -->
+    <!-- 双视口协同分栏 (Dual-Pane Co-View Layout) -->
     <div class="dashboard-split">
-      <!-- 左侧：拓扑因果图画布 -->
-      <div class="graph-panel">
-        <div class="panel-header">
-          <div class="panel-title">
-            <span>🌐</span>
-            <span>因果拓扑图实时演化视窗 (Topological Causal Graph)</span>
+      <!-- 左侧：上下协同双视口 (Three.js 3D + Vis.js Causal Graph) -->
+      <div class="dual-pane-container">
+        <!-- 上层视口: WebGL / Three.js 3D 动力学仿真与数字孪生视窗 -->
+        <div id="viewport-3d">
+          <div class="viewport-overlay-header">
+            <!-- 视角模式切换器 -->
+            <div class="viewport-tools-group">
+              <button class="btn-tool active" id="cam-btn-orbit" onclick="setStudioCamera('orbit')">🌐 自由轨道 (Orbit)</button>
+              <button class="btn-tool" id="cam-btn-follow" onclick="setStudioCamera('follow')">🎥 车身跟随 (Follow)</button>
+              <button class="btn-tool" id="cam-btn-top" onclick="setStudioCamera('top')">⬇️ 顶视俯瞰 (Top)</button>
+            </div>
+
+            <!-- 网格吸附与快捷工具 -->
+            <div class="viewport-tools-group">
+              <button class="btn-tool active" id="snap-toggle-btn" onclick="toggleSnapping()">🧲 网格吸附: 0.2m</button>
+              <button class="btn-tool" onclick="clearRobotTrail()">🧹 清除轨迹</button>
+              <button class="btn-tool" onclick="toggleViewportFullscreen('viewport-3d')">⛶ 全屏</button>
+            </div>
           </div>
-          <div class="panel-actions">
-            <button class="btn-action" onclick="fitNetwork()">🔍 重置缩放 (Fit View)</button>
-            <button class="btn-action" onclick="togglePhysics()">⏸ 切换物理稳定 (Physics)</button>
-            <button class="btn-action" onclick="reconnectWebSocket()">🔄 重新连接</button>
+
+          <!-- 3D 视口覆盖层 HUD 仪表 -->
+          <div class="hud-overlay">
+            <div class="hud-item">
+              <span class="hud-label">小车位姿 (Pose)</span>
+              <span class="hud-val" id="hud-pose">X:0.00 Y:0.04 Z:0.00</span>
+            </div>
+            <div class="hud-item">
+              <span class="hud-label">俯仰角 (Pitch)</span>
+              <span class="hud-val" id="hud-pitch">0.0°</span>
+            </div>
+            <div class="hud-item">
+              <span class="hud-label">横滚角 (Roll)</span>
+              <span class="hud-val" id="hud-roll">0.0°</span>
+            </div>
+            <div class="hud-item">
+              <span class="hud-label">线速度 (Speed)</span>
+              <span class="hud-val" id="hud-speed">0.00 m/s</span>
+            </div>
           </div>
+
+          <!-- 报警横幅提示 -->
+          <div id="hud-alert-msg">💥 微动碰撞硬安全屏蔽激活！</div>
         </div>
 
-        <div id="network-canvas"></div>
+        <!-- 下层视口: Vis.js 因果拓扑图实时演化视窗 -->
+        <div class="graph-panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <span>🌐</span>
+              <span>因果拓扑图实时演化视窗 (Topological Causal Graph)</span>
+            </div>
+            <div class="panel-actions">
+              <button class="btn-action" onclick="fitNetwork()">🔍 重置缩放 (Fit View)</button>
+              <button class="btn-action" onclick="togglePhysics()">⏸ 切换物理稳定 (Physics)</button>
+              <button class="btn-action" onclick="reconnectWebSocket()">🔄 重新连接</button>
+              <button class="btn-action" onclick="toggleViewportFullscreen('.graph-panel')">⛶ 全屏</button>
+            </div>
+          </div>
 
-        <div class="graph-legend">
-          <div class="legend-item">
-            <span class="legend-color" style="background: #38bdf8;"></span>
-            <span>空间安全状态 (1~81)</span>
-          </div>
-          <div class="legend-item">
-            <span class="legend-color" style="background: #f87171;"></span>
-            <span>物理碰撞事件 (ID:0)</span>
-          </div>
-          <div class="legend-item">
-            <span class="legend-color" style="background: #fbbf24;"></span>
-            <span>动态感知跃迁 (101~181)</span>
-          </div>
-          <div class="legend-item">
-            <span class="legend-color" style="background: #34d399;"></span>
-            <span>高置信正回报边</span>
+          <div id="network-canvas"></div>
+
+          <div class="graph-legend">
+            <div class="legend-item">
+              <span class="legend-color" style="background: #38bdf8;"></span>
+              <span>空间安全状态 (1~81)</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="background: #f87171;"></span>
+              <span>物理碰撞事件 (ID:0)</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="background: #fbbf24;"></span>
+              <span>动态感知跃迁 (101~181)</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="background: #34d399;"></span>
+              <span>高置信正回报边</span>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- 右侧：节点详情与群体小车状态 -->
+      <!-- 右侧：多选项卡控制面板 (3D工坊 / 节点因果下钻 / 集群遥测) -->
       <div class="sidebar-panel">
-        <!-- 节点因果下钻面板 -->
-        <div class="detail-card">
-          <div class="panel-header">
-            <div class="panel-title">
-              <span>🔍</span>
-              <span>节点与因果链详情</span>
+        <div class="sidebar-tabs">
+          <button class="tab-btn active" id="tab-btn-3d" onclick="switchSidebarTab('3d')">🛠 3D 构件与地形</button>
+          <button class="tab-btn" id="tab-btn-drilldown" onclick="switchSidebarTab('drilldown')">🔍 节点因果下钻</button>
+          <button class="tab-btn" id="tab-btn-fleet" onclick="switchSidebarTab('fleet')">🤖 活跃小车集群</button>
+        </div>
+
+        <!-- 选项卡 1: 3D 构件库与场景雕刻工具箱 -->
+        <div class="tab-pane active" id="tab-content-3d">
+          <!-- 3D 预置障碍物构件库 -->
+          <div class="sidebar-card">
+            <div class="panel-header">
+              <div class="panel-title"><span>🧱</span><span>预置障碍物库 (点击放入)</span></div>
+            </div>
+            <div class="sidebar-card-body">
+              <div class="palette-grid">
+                <button class="palette-card-btn active" onclick="pickPalette('stairs')">
+                  <span class="icon">🪜</span>
+                  <span>阶梯楼梯 (Stairs)</span>
+                </button>
+                <button class="palette-card-btn" onclick="pickPalette('ramp')">
+                  <span class="icon">📐</span>
+                  <span>变坡斜坡 (Ramp)</span>
+                </button>
+                <button class="palette-card-btn" onclick="pickPalette('bridge')">
+                  <span class="icon">🌉</span>
+                  <span>拱桥立交 (Bridge)</span>
+                </button>
+                <button class="palette-card-btn" onclick="pickPalette('corridor')">
+                  <span class="icon">🧱</span>
+                  <span>拐弯狭道 (Corridor)</span>
+                </button>
+                <button class="palette-card-btn" onclick="pickPalette('pillar')">
+                  <span class="icon">📦</span>
+                  <span>障碍石柱 (Pillar)</span>
+                </button>
+                <button class="palette-card-btn" onclick="pickPalette('goal')">
+                  <span class="icon">🏁</span>
+                  <span>终点目标 (Goal)</span>
+                </button>
+              </div>
             </div>
           </div>
-          <div class="node-detail-content">
-            <div class="info-block">
-              <div class="info-label">选中的感知事件节点 ID</div>
-              <div class="info-value" id="detail-node-id">点击拓扑图节点查看</div>
+
+          <!-- 地形起伏高程笔刷 -->
+          <div class="sidebar-card">
+            <div class="panel-header">
+              <div class="panel-title"><span>🎨</span><span>地形高程雕刻笔刷 (Heightmap)</span></div>
+              <button class="btn-action" style="padding:0.2rem 0.5rem; font-size:0.72rem;" onclick="resetTerrain()">复位平坦</button>
             </div>
-            <div class="info-block">
-              <div class="info-label">经验访问频次 (Observations)</div>
-              <div class="info-value" id="detail-visit-count">-</div>
+            <div class="sidebar-card-body brush-controls">
+              <div class="brush-modes">
+                <button class="brush-mode-btn active" id="bmode-raise" onclick="setBrushMode('raise')">🔺 升高</button>
+                <button class="brush-mode-btn" id="bmode-lower" onclick="setBrushMode('lower')">🔻 挖坑</button>
+                <button class="brush-mode-btn" id="bmode-flatten" onclick="setBrushMode('flatten')">➖ 平整</button>
+                <button class="brush-mode-btn" id="bmode-smooth" onclick="setBrushMode('smooth')">〰️ 平滑</button>
+              </div>
+              <div class="slider-row">
+                <span>笔刷半径: <strong id="val-brush-radius">2.5m</strong></span>
+                <input type="range" min="0.5" max="6.0" step="0.5" value="2.5" oninput="onBrushRadiusChange(this.value)">
+              </div>
+              <div class="slider-row">
+                <span>笔刷强度: <strong id="val-brush-strength">0.20</strong></span>
+                <input type="range" min="0.05" max="0.8" step="0.05" value="0.2" oninput="onBrushStrengthChange(this.value)">
+              </div>
             </div>
-            <div class="info-block">
-              <div class="info-label">前向因果动作预测分支 (Outbound Transitions)</div>
-              <div class="action-badge-list" id="detail-transitions">
-                <div style="font-size:0.8rem; color:var(--text-muted);">暂无选择节点</div>
+          </div>
+
+          <!-- 小车出生点配置 -->
+          <div class="sidebar-card">
+            <div class="panel-header">
+              <div class="panel-title"><span>🎯</span><span>小车出生点与安全校验</span></div>
+              <span id="spawn-clearance-badge" style="font-size:0.75rem; color:var(--accent-green); font-weight:600;">安全 (Clear)</span>
+            </div>
+            <div class="sidebar-card-body">
+              <div class="spawn-inputs-row">
+                <div class="spawn-input-box">
+                  <label>X (米)</label>
+                  <input type="number" step="0.1" id="spawn-x" value="0.00" onchange="onSpawnInputChange()">
+                </div>
+                <div class="spawn-input-box">
+                  <label>Y (米)</label>
+                  <input type="number" step="0.05" id="spawn-y" value="0.15" onchange="onSpawnInputChange()">
+                </div>
+                <div class="spawn-input-box">
+                  <label>Z (米)</label>
+                  <input type="number" step="0.1" id="spawn-z" value="0.00" onchange="onSpawnInputChange()">
+                </div>
+                <div class="spawn-input-box">
+                  <label>朝向(°)</label>
+                  <input type="number" step="15" id="spawn-yaw" value="0" onchange="onSpawnInputChange()">
+                </div>
+              </div>
+              <button class="btn-action" style="width:100%; text-align:center;" onclick="markCurrentPoseAsSpawn()">📍 标记小车当前位姿为出生点</button>
+            </div>
+          </div>
+
+          <!-- 外部 3D 模型资产导入 -->
+          <div class="sidebar-card">
+            <div class="panel-header">
+              <div class="panel-title"><span>📤</span><span>外部 3D 模型导入 (.obj / .stl / .glb)</span></div>
+            </div>
+            <div class="sidebar-card-body">
+              <div class="upload-dropzone" onclick="document.getElementById('model-file-input').click()">
+                <span style="font-size:1.4rem;">📦</span>
+                <span style="font-size:0.8rem; color:var(--text-main); font-weight:600;">点击或拖拽 3D 模型至此</span>
+                <span style="font-size:0.7rem; color:var(--text-muted);">支持 OBJ, STL, GLB/GLTF（自动缩放归一化）</span>
+              </div>
+              <input type="file" id="model-file-input" accept=".obj,.stl,.glb,.gltf" style="display:none;" onchange="onModelFilePicked(event)">
+            </div>
+          </div>
+        </div>
+
+        <!-- 选项卡 2: 节点因果下钻详情 -->
+        <div class="tab-pane" id="tab-content-drilldown">
+          <div class="sidebar-card" style="flex:1;">
+            <div class="panel-header">
+              <div class="panel-title"><span>🔍</span><span>节点与因果链详情</span></div>
+            </div>
+            <div class="node-detail-content">
+              <div class="info-block">
+                <div class="info-label">选中的感知事件节点 ID</div>
+                <div class="info-value" id="detail-node-id">点击拓扑图节点查看</div>
+              </div>
+              <div class="info-block">
+                <div class="info-label">经验访问频次 (Observations)</div>
+                <div class="info-value" id="detail-visit-count">-</div>
+              </div>
+              <div class="info-block">
+                <div class="info-label">前向因果动作预测分支 (Outbound Transitions)</div>
+                <div class="action-badge-list" id="detail-transitions">
+                  <div style="font-size:0.8rem; color:var(--text-muted);">暂无选择节点</div>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- 机器人集群监控面板 -->
-        <div class="detail-card" style="flex: 0 0 auto;">
-          <div class="panel-header">
-            <div class="panel-title">
-              <span>🤖</span>
-              <span>集群机器人活跃状态 (<span id="fleet-count">0</span>)</span>
+        <!-- 选项卡 3: 机器人集群列表 -->
+        <div class="tab-pane" id="tab-content-fleet">
+          <div class="sidebar-card" style="flex:1;">
+            <div class="panel-header">
+              <div class="panel-title">
+                <span>🤖</span>
+                <span>集群机器人活跃状态 (<span id="fleet-count">0</span>)</span>
+              </div>
             </div>
-          </div>
-          <div class="robot-fleet-content" id="robot-fleet-list">
-            <div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding: 1rem 0;">
-              暂无在线机器人遥测
+            <div class="robot-fleet-content" id="robot-fleet-list">
+              <div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding: 1.5rem 0;">
+                暂无在线机器人遥测
+              </div>
             </div>
           </div>
         </div>
@@ -538,7 +1088,9 @@
     </div>
   </main>
 
-  <!-- Vis.js 增量渲染与 WebSocket 通信脚本 -->
+  <!-- ========================================================================= -->
+  <!-- 核心交互逻辑与 WebSocket 数据中继                                       -->
+  <!-- ========================================================================= -->
   <script>
     // =========================================================================
     // 全局常量与动作字典
@@ -551,7 +1103,7 @@
       "右转 (Right)"
     ];
 
-    // 全局 Vis.js 网络与增量数据集实例
+    // 全局 Vis.js 网络与增量数据集实例 (坚守既有测试契约)
     let network = null;
     let nodesDataSet = new vis.DataSet([]);
     let edgesDataSet = new vis.DataSet([]);
@@ -564,9 +1116,12 @@
     const MAX_RECONNECT_DELAY = 15000;
     let heartbeatInterval = null;
 
-    // 本地缓存
+    // 本地集群缓存
     const fleetRobots = {};
     let selectedNodeId = null;
+
+    // 吸附开关状态
+    let snapStep = 0.2;
 
     // =========================================================================
     // 1. 初始化 Vis.js 拓扑网络引擎 (增量数据集 + 高阻尼抗抖动配置)
@@ -615,11 +1170,15 @@
 
       network = new vis.Network(container, data, options);
 
-      // 绑定节点点击因果链下钻联动
+      // 绑定节点点击因果链下钻联动与 3D 相机飞行动画
       network.on("click", function(params) {
         if (params.nodes && params.nodes.length > 0) {
           const nid = params.nodes[0];
           showNodeDetails(nid);
+          // 联动 3D 视口相机聚焦到对应因果事件空间区域
+          if (window.TwinSync && typeof window.TwinSync.onVisNodeClicked === 'function') {
+            window.TwinSync.onVisNodeClicked(nid);
+          }
         }
       });
     }
@@ -703,7 +1262,6 @@
       const protocol = loc.protocol === "https:" ? "wss:" : "ws:";
       const host = loc.hostname || "localhost";
       const port = loc.port ? loc.port : (loc.protocol === "https:" ? 443 : 8000);
-      // 如果当前不是运行在 8000 端口，尝试连接标准 8000 端口
       const wsPort = (loc.port === "8000" || !loc.port) ? "8000" : "8000";
       return `${protocol}//${host}:${wsPort}/ws/live_graph`;
     }
@@ -726,7 +1284,7 @@
         updateStatusBadge("online", "在线图演化中 (Active Learning)");
         reconnectDelay = 1000;
 
-        // 启动定时心跳保持通道活跃
+        // 启动心跳保持通道
         clearInterval(heartbeatInterval);
         heartbeatInterval = setInterval(function() {
           if (ws && ws.readyState === WebSocket.OPEN) {
@@ -781,7 +1339,6 @@
         console.log("[WebSocket] Received initial_state:", msg);
         const graph = msg.global_graph || {};
 
-        // 增量解析节点
         const rawNodes = graph.nodes || {};
         const nodeArray = Array.isArray(rawNodes) ? rawNodes : Object.values(rawNodes);
         const formattedNodes = nodeArray.map(formatNode);
@@ -789,7 +1346,6 @@
           nodesDataSet.update(formattedNodes);
         }
 
-        // 增量解析边
         const rawEdges = graph.edges || {};
         const edgeArray = Array.isArray(rawEdges) ? rawEdges : Object.values(rawEdges);
         const formattedEdges = edgeArray.map(formatEdge);
@@ -797,7 +1353,6 @@
           edgesDataSet.update(formattedEdges);
         }
 
-        // 更新仪表盘指标
         const meta = graph.meta || msg.meta || {};
         updateMetrics(
           meta.total_nodes || formattedNodes.length,
@@ -806,7 +1361,6 @@
           "88.2%"
         );
 
-        // 刷新小车列表
         if (msg.robots) {
           for (const [rid, rdata] of Object.entries(msg.robots)) {
             fleetRobots[rid] = rdata;
@@ -819,28 +1373,22 @@
 
       // 4.2 增量因果图演化帧 (graph_updated / graph_delta)
       else if (type === "graph_updated" || type === "graph_delta" || type === "GRAPH_DELTA_UPDATE") {
-        console.log("[WebSocket] Received graph evolution frame:", msg);
-
-        // 处理新增/变动节点
         const deltaNodes = msg.delta_nodes || msg.nodes_added || [];
         if (Array.isArray(deltaNodes) && deltaNodes.length > 0) {
           const updates = deltaNodes.map(formatNode);
           nodesDataSet.update(updates);
         }
 
-        // 处理新增/变动边
         const deltaEdges = msg.delta_edges || msg.edges_added || [];
         if (Array.isArray(deltaEdges) && deltaEdges.length > 0) {
           const updates = deltaEdges.map(formatEdge);
           edgesDataSet.update(updates);
         }
 
-        // 处理代表性单边更新 (契约兼容)
         if (msg.edge) {
           edgesDataSet.update(formatEdge(msg.edge));
         }
 
-        // 刷新指标总数
         updateMetrics(
           msg.total_nodes || nodesDataSet.length,
           msg.total_edges || edgesDataSet.length,
@@ -848,7 +1396,6 @@
           null
         );
 
-        // 若当前选中的节点受到边更新影响，刷新下钻详情
         if (selectedNodeId !== null) {
           showNodeDetails(selectedNodeId);
         }
@@ -869,17 +1416,28 @@
           last_seen: Date.now()
         };
         renderRobotFleet();
+
+        // 联动 3D 动力学数字孪生体平滑内插
+        if (window.TwinSync && typeof window.TwinSync.onTelemetryReceived === 'function') {
+          window.TwinSync.onTelemetryReceived(msg);
+        }
       }
 
       // 4.4 拓扑剪枝维护帧 (graph_pruned)
       else if (type === "graph_pruned") {
-        console.log("[WebSocket] Received graph_pruned event:", msg);
         updateMetrics(msg.total_nodes, msg.total_edges, null, null);
+      }
+
+      // 4.5 场景重塑帧 (scene_loaded)
+      else if (type === "scene_loaded" && msg.scene) {
+        if (window.SceneIO) {
+          window.SceneIO.importSceneFromJson(JSON.stringify(msg.scene));
+        }
       }
     }
 
     // =========================================================================
-    // 5. UI 交互与信息卡片动态渲染
+    // 5. UI 交互与大屏状态分发
     // =========================================================================
     function updateMetrics(nodes, edges, steps, hitRate) {
       if (nodes !== null && nodes !== undefined) {
@@ -912,7 +1470,6 @@
       document.getElementById('detail-visit-count').textContent = 
         nodeId === 0 ? `${visitCount} 次物理碰撞` : `${visitCount} 次观测探索`;
 
-      // 动态检索从该节点出发的所有前向因果转移边
       const outgoingEdges = edgesDataSet.get({
         filter: function(edge) {
           return edge.from === nodeId;
@@ -958,7 +1515,7 @@
       document.getElementById('fleet-count').textContent = robotKeys.length;
 
       if (robotKeys.length === 0) {
-        listContainer.innerHTML = `<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding: 1rem 0;">暂无在线机器人遥测</div>`;
+        listContainer.innerHTML = `<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding: 1.5rem 0;">暂无在线机器人遥测</div>`;
         return;
       }
 
@@ -1011,10 +1568,193 @@
     }
 
     // =========================================================================
-    // 6. 页面装载入口
+    // 6. 工作台模式与选项卡调度
+    // =========================================================================
+    function switchDashboardMode(mode) {
+      const btnTwin = document.getElementById('btn-mode-twin');
+      const btnStudio = document.getElementById('btn-mode-studio');
+      if (mode === 'twin') {
+        btnTwin.className = 'mode-btn active';
+        btnStudio.className = 'mode-btn';
+        if (window.EditorTools) window.EditorTools.setActiveTool('select');
+        switchSidebarTab('drilldown');
+      } else {
+        btnTwin.className = 'mode-btn';
+        btnStudio.className = 'mode-btn active';
+        switchSidebarTab('3d');
+      }
+    }
+
+    function switchSidebarTab(tabName) {
+      ['3d', 'drilldown', 'fleet'].forEach(t => {
+        const btn = document.getElementById(`tab-btn-${t}`);
+        const content = document.getElementById(`tab-content-${t}`);
+        if (btn) btn.className = `tab-btn ${t === tabName ? 'active' : ''}`;
+        if (content) content.className = `tab-pane ${t === tabName ? 'active' : ''}`;
+      });
+    }
+
+    function setStudioCamera(mode) {
+      ['orbit', 'follow', 'top'].forEach(m => {
+        const b = document.getElementById(`cam-btn-${m}`);
+        if (b) b.className = `btn-tool ${m === mode ? 'active' : ''}`;
+      });
+      if (window.Studio3D) {
+        window.Studio3D.setCameraMode(mode);
+      }
+    }
+
+    function toggleSnapping() {
+      const btn = document.getElementById('snap-toggle-btn');
+      if (snapStep === 0.2) {
+        snapStep = 0.5;
+        btn.textContent = "🧲 网格吸附: 0.5m";
+        btn.className = "btn-tool active";
+      } else if (snapStep === 0.5) {
+        snapStep = 0;
+        btn.textContent = "🧲 吸附: 关闭";
+        btn.className = "btn-tool";
+      } else {
+        snapStep = 0.2;
+        btn.textContent = "🧲 网格吸附: 0.2m";
+        btn.className = "btn-tool active";
+      }
+      if (window.EditorTools) {
+        window.EditorTools.setGridSnap(snapStep);
+      }
+    }
+
+    function clearRobotTrail() {
+      if (window.TwinSync) {
+        window.TwinSync.clearTrajectory();
+      }
+    }
+
+    function toggleViewportFullscreen(selector) {
+      const elem = document.querySelector(selector);
+      if (!elem) return;
+      if (!document.fullscreenElement) {
+        elem.requestFullscreen().catch(err => console.warn(err));
+      } else {
+        document.exitFullscreen().catch(err => console.warn(err));
+      }
+    }
+
+    function pickPalette(type) {
+      document.querySelectorAll('.palette-card-btn').forEach(b => b.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+      if (window.EditorTools) {
+        window.EditorTools.selectPaletteItem(type);
+      }
+    }
+
+    function setBrushMode(mode) {
+      document.querySelectorAll('.brush-mode-btn').forEach(b => b.classList.remove('active'));
+      const activeBtn = document.getElementById(`bmode-${mode}`);
+      if (activeBtn) activeBtn.classList.add('active');
+      if (window.EditorTools) {
+        window.EditorTools.setActiveTool('brush');
+        window.EditorTools.setBrushMode(mode);
+      }
+    }
+
+    function onBrushRadiusChange(val) {
+      document.getElementById('val-brush-radius').textContent = `${parseFloat(val).toFixed(1)}m`;
+      if (window.EditorTools) window.EditorTools.setBrushRadius(parseFloat(val));
+    }
+
+    function onBrushStrengthChange(val) {
+      document.getElementById('val-brush-strength').textContent = parseFloat(val).toFixed(2);
+      if (window.EditorTools) window.EditorTools.setBrushStrength(parseFloat(val));
+    }
+
+    function resetTerrain() {
+      if (confirm('确认将高程图复位为平坦平面？')) {
+        if (window.EditorTools) window.EditorTools.resetTerrainHeights();
+      }
+    }
+
+    function markCurrentPoseAsSpawn() {
+      if (window.TwinSync && window.EditorTools) {
+        const group = window.TwinSync.getRobotGroup();
+        if (group) {
+          const yaw = group.rotation.y * (180.0 / Math.PI);
+          window.EditorTools.setSpawnPose(group.position.x, group.position.y, group.position.z, yaw);
+        }
+      }
+    }
+
+    function onSpawnInputChange() {
+      const x = parseFloat(document.getElementById('spawn-x').value) || 0;
+      const y = parseFloat(document.getElementById('spawn-y').value) || 0.15;
+      const z = parseFloat(document.getElementById('spawn-z').value) || 0;
+      const yaw = parseFloat(document.getElementById('spawn-yaw').value) || 0;
+      if (window.EditorTools) {
+        window.EditorTools.setSpawnPose(x, y, z, yaw);
+      }
+    }
+
+    function onModelFilePicked(e) {
+      const file = e.target.files[0];
+      if (file && window.EditorTools) {
+        window.EditorTools.importCustom3DModel(file);
+      }
+    }
+
+    // =========================================================================
+    // 7. 场景导入与导出 (scene.json)
+    // =========================================================================
+    function exportSceneJson() {
+      if (window.SceneIO) {
+        window.SceneIO.downloadSceneJson("scene.json");
+      }
+    }
+
+    function triggerSceneImport() {
+      document.getElementById('scene-file-input').click();
+    }
+
+    function onSceneFilePicked(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        if (window.SceneIO) {
+          window.SceneIO.importSceneFromJson(evt.target.result);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function onPresetSelected(presetKey) {
+      if (presetKey && window.SceneIO) {
+        window.SceneIO.loadPresetScene(presetKey);
+      }
+    }
+
+    // =========================================================================
+    // 8. 页面装载入口
     // =========================================================================
     window.addEventListener('load', function() {
+      // 1. 初始化 Vis.js 拓扑网络
       initNetwork();
+
+      // 2. 初始化 Three.js 3D 仿真视口
+      if (window.Studio3D) {
+        window.Studio3D.init('viewport-3d');
+      }
+
+      // 3. 初始化编辑器交互与出生点
+      if (window.EditorTools) {
+        window.EditorTools.init();
+      }
+
+      // 4. 初始化数字孪生与事件联动
+      if (window.TwinSync) {
+        window.TwinSync.init();
+      }
+
+      // 5. 连接 WebSocket 网关
       connectWebSocket();
     });
   </script>

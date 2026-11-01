@@ -373,6 +373,133 @@ class TestFastAPIGatewayAndWebSocket(unittest.TestCase):
             self.assertEqual(json_pong["type"], "pong")
 
 
+class TestFastAPISceneAndAssetEndpoints(unittest.TestCase):
+    """
+    [ZH] 验证 Phase D Web 3D 工作台场景序列化 (scene.json) 与外部模型上传 API 网关。
+    [EN] Verify Phase D Web 3D studio scene serialization and model asset upload endpoints.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from api.main import app
+        cls.client = TestClient(app)
+
+    def test_get_current_scene(self):
+        """[ZH] 测试获取当前默认 3D 场景配置"""
+        res = self.client.get("/api/v1/scenes/current")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["version"], "1.0.0")
+        self.assertIn("world", data)
+        self.assertIn("terrain", data)
+        self.assertIn("obstacles", data)
+
+    def test_export_scene(self):
+        """[ZH] 测试导出当前场景为格式化 JSON"""
+        res = self.client.post("/api/v1/scenes/export")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["status"], "success")
+        self.assertIn("json_str", data)
+        self.assertIn('"version": "1.0.0"', data["json_str"])
+
+    def test_import_valid_scene(self):
+        """[ZH] 测试上传有效 scene.json 完整复原"""
+        sample_scene = {
+            "version": "1.0.0",
+            "metadata": {"name": "TestStairsRampScene"},
+            "world": {"gravity": [0, 0, -9.81], "timestep": 0.005, "arena_size": [12.0, 12.0, 3.0]},
+            "terrain": {"type": "heightmap", "resolution": [8, 8], "data": [[0.0]*8]*8},
+            "obstacles": [
+                {"id": "stairs_test", "type": "stairs", "position": [1.0, 0.0, 0.0], "params": {"step_count": 4}}
+            ],
+            "robot_spawns": [{"sim_id": "sim_bot_01", "position": [0.0, 0.0, 0.1]}]
+        }
+        res = self.client.post("/api/v1/scenes/import", json=sample_scene)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["status"], "success")
+        self.assertEqual(res.json()["obstacle_count"], 1)
+
+    def test_import_invalid_scene_missing_fields_raises_400(self):
+        """[ZH] 测试导入缺少必须字段的 scene.json 返回 400 异常"""
+        bad_scene = {"version": "1.0.0", "obstacles": []}
+        res = self.client.post("/api/v1/scenes/import", json=bad_scene)
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("Missing required scene field", res.json()["detail"])
+
+    def test_save_scene(self):
+        """[ZH] 测试场景持久化保存端点"""
+        scene_to_save = {
+            "version": "1.0.0",
+            "metadata": {"name": "SavedBenchmark"},
+            "world": {},
+            "terrain": {},
+            "obstacles": []
+        }
+        res = self.client.post("/api/v1/scenes/save", json=scene_to_save)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["status"], "saved")
+
+    def test_upload_valid_obj_model(self):
+        """[ZH] 测试上传合规 .obj 外部网格资产"""
+        payload = {
+            "filename": "obstacle_wedge.obj",
+            "content_text": "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n"
+        }
+        res = self.client.post("/api/v1/assets/upload", json=payload)
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["status"], "valid")
+        self.assertEqual(data["format"], "obj")
+
+    def test_upload_unsupported_model_format_rejected(self):
+        """[ZH] 测试上传不支持的文件类型 (.fbx) 被拒绝"""
+        payload = {
+            "filename": "model.fbx",
+            "content_text": "dummy"
+        }
+        res = self.client.post("/api/v1/assets/upload", json=payload)
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("Unsupported format", res.json()["detail"])
+
+    def test_upload_model_size_limit_rejected(self):
+        """[ZH] 测试上传超大资产 (>20MB) 被拒绝"""
+        import base64
+        # 伪造 21MB base64 数据
+        payload = {
+            "filename": "huge.obj",
+            "content_text": "x" * (21 * 1024 * 1024)
+        }
+        res = self.client.post("/api/v1/assets/upload", json=payload)
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("exceeds limit", res.json()["detail"])
+
+    def test_telemetry_with_3d_pose_and_dynamics(self):
+        """[ZH] 测试遥测接口包含 3D 姿态与动力学并推流"""
+        telemetry = {
+            "robot_id": "sim_bot_3d",
+            "timestamp_ms": 1730452145000,
+            "current_event_id": 42,
+            "last_action": 1,
+            "last_reward": 1.0,
+            "battery_percentage": 95,
+            "bumper_hit": False,
+            "sensor_distances": [500, 600, 700, 800, 800, 700, 600, 500],
+            "pose": {
+                "x": 1.5, "y": 0.2, "z": -0.5,
+                "roll": 0.05, "pitch": -0.1, "yaw": 1.57,
+                "quaternion": [0.0, 0.7071, 0.0, 0.7071]
+            },
+            "dynamics": {
+                "wheel_slip": False,
+                "slope_tilt_deg": 5.8
+            }
+        }
+        res = self.client.post("/api/v1/robots/sim_bot_3d/telemetry", json=telemetry)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["status"], "accepted")
+
+
 class TestDashboardHtmlContract(unittest.TestCase):
     """
     [ZH] 静态断言前端看板 index.html 包含增量 DataSet 更新与抗抖动配置。

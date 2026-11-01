@@ -60,6 +60,68 @@ in_memory_global_graph: Dict[str, Any] = {
     "edges": {},
 }
 
+# 默认 3D 物理竞技场场景模型 (对齐 PROJECT.md 与 Phase A/C/D 标准契约)
+in_memory_current_scene: Dict[str, Any] = {
+    "version": "1.0.0",
+    "metadata": {
+        "name": "Arena3D_DefaultBenchmark",
+        "author": "EPGM Studio Visualizer",
+        "created_at": "2026-11-01T12:00:00Z"
+    },
+    "world": {
+        "gravity": [0.0, 0.0, -9.81],
+        "timestep": 0.005,
+        "substeps": 4,
+        "arena_size": [10.0, 10.0, 3.0]
+    },
+    "terrain": {
+        "type": "heightmap",
+        "resolution": [16, 16],
+        "horizontal_scale": [0.2, 0.2],
+        "vertical_scale": 0.5,
+        "data": [[0.0 for _ in range(16)] for _ in range(16)]
+    },
+    "obstacles": [
+        {
+            "id": "stairs_01",
+            "type": "stairs",
+            "position": [2.0, 0.0, 0.0],
+            "orientation_yaw": 0.0,
+            "params": {"step_count": 5, "step_width": 1.2, "step_height": 0.04, "step_depth": 0.20}
+        },
+        {
+            "id": "ramp_01",
+            "type": "ramp",
+            "position": [-2.0, 1.0, 0.0],
+            "orientation_yaw": 1.57,
+            "params": {"length": 2.5, "width": 1.2, "slope_deg": 18.0, "friction": 0.8}
+        },
+        {
+            "id": "bridge_01",
+            "type": "bridge",
+            "position": [0.0, 3.0, 0.0],
+            "orientation_yaw": 0.0,
+            "params": {"span": 3.0, "width": 1.2, "clearance": 0.5, "ramp_slope_deg": 15.0}
+        },
+        {
+            "id": "corridor_01",
+            "type": "corridor",
+            "position": [-3.0, -2.0, 0.0],
+            "orientation_yaw": 0.0,
+            "params": {"wall_height": 0.5, "corridor_width": 0.8, "turns": [[0, 2], [2, 2]]}
+        }
+    ],
+    "custom_assets": [],
+    "robot_spawns": [
+        {
+            "sim_id": "sim_bot_01",
+            "config_file": "robot_config.json",
+            "position": [0.0, 0.0, 0.1],
+            "orientation_yaw": 0.0
+        }
+    ]
+}
+
 
 # ------------------------------------------------------------------------------
 # Pydantic 请求与响应数据模式
@@ -74,6 +136,8 @@ class TelemetryPayload(BaseModel):
     battery_percentage: int = Field(100, description="[ZH] 电池剩余电量 (0~100)")
     bumper_hit: bool = Field(False, description="[ZH] 微动碰撞状态")
     sensor_distances: List[int] = Field(default_factory=list, description="[ZH] 8路雷达读数 (mm)")
+    pose: Optional[Dict[str, Any]] = Field(default=None, description="[ZH] 3D 空间位姿 (x,y,z,roll,pitch,yaw,quaternion)")
+    dynamics: Optional[Dict[str, Any]] = Field(default=None, description="[ZH] 动力学参数 (wheel_slip, slope_tilt_deg)")
 
 
 class GraphDeltaPayload(BaseModel):
@@ -83,6 +147,24 @@ class GraphDeltaPayload(BaseModel):
     step_index: int = Field(0, description="[ZH] 局部交互步数")
     nodes: List[Dict[str, Any]] = Field(default_factory=list, description="[ZH] 新增或更新节点")
     edges: List[Dict[str, Any]] = Field(default_factory=list, description="[ZH] 新增或更新因果边")
+
+
+class SceneDataPayload(BaseModel):
+    """[ZH] 场景序列化数据模型 (scene.json) / [EN] Scene serialization data model"""
+    version: str = Field("1.0.0", description="[ZH] 协议版本")
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="[ZH] 场景元数据")
+    world: Dict[str, Any] = Field(default_factory=dict, description="[ZH] 物理世界配置 (重力、步长、竞技场尺寸)")
+    terrain: Dict[str, Any] = Field(default_factory=dict, description="[ZH] 高程图地形配置")
+    obstacles: List[Dict[str, Any]] = Field(default_factory=list, description="[ZH] 障碍物列表")
+    custom_assets: Optional[List[Dict[str, Any]]] = Field(default_factory=list, description="[ZH] 自定义3D资产")
+    robot_spawns: Optional[List[Dict[str, Any]]] = Field(default_factory=list, description="[ZH] 机器人出生点")
+
+
+class AssetUploadPayload(BaseModel):
+    """[ZH] 外部3D模型资产上传模型 / [EN] External 3D model asset upload model"""
+    filename: str = Field(..., description="[ZH] 文件名 (.obj, .stl, .glb, .gltf)")
+    content_base64: Optional[str] = Field(None, description="[ZH] Base64编码的文件二进制流")
+    content_text: Optional[str] = Field(None, description="[ZH] 文本文件内容 (如 ASCII OBJ/STL)")
 
 
 # ------------------------------------------------------------------------------
@@ -328,6 +410,8 @@ async def receive_telemetry(robot_id: str, payload: TelemetryPayload) -> Dict[st
         "current_event": payload.current_event_id,
         "last_reward": payload.last_reward,
         "last_action": payload.last_action,
+        "pose": payload.pose,
+        "dynamics": payload.dynamics,
     }
 
     try:
@@ -347,11 +431,13 @@ async def receive_telemetry(robot_id: str, payload: TelemetryPayload) -> Dict[st
     except Exception:
         pass
 
-    # 2. 广播遥测帧给 WebSocket 客户端
+    # 2. 广播遥测帧给 WebSocket 客户端 (包含高维 3D 姿态与动力学)
     event_frame = {
         "type": "telemetry_update",
         "robot_id": robot_id,
         "timestamp_ms": payload.timestamp_ms,
+        "pose": payload.pose,
+        "dynamics": payload.dynamics,
         "data": {
             "robot_id": robot_id,
             "battery_percentage": payload.battery_percentage,
@@ -361,6 +447,8 @@ async def receive_telemetry(robot_id: str, payload: TelemetryPayload) -> Dict[st
             "last_reward": payload.last_reward,
             "last_action_name": payload.last_action,
             "sensor_distances": payload.sensor_distances,
+            "pose": payload.pose,
+            "dynamics": payload.dynamics,
         },
     }
     await manager.broadcast(event_frame)
@@ -448,6 +536,121 @@ def get_snapshots_endpoint(limit: int = 10) -> Dict[str, Any]:
     except Exception as e:
         logger.warning(f"Error querying snapshots: {e}")
         return {"snapshots": [], "error": str(e)}
+
+
+# ------------------------------------------------------------------------------
+# 3D 虚拟场景与模型资产 RESTful 接口 (Phase D - Web 3D Studio & Digital Twin)
+# ------------------------------------------------------------------------------
+@app.get("/api/v1/scenes/current")
+def get_current_scene_endpoint() -> Dict[str, Any]:
+    """
+    [ZH] 获取当前活跃 3D 场景配置模型 (scene.json)。
+    [EN] Retrieve current active 3D scene configuration model (scene.json).
+    """
+    global in_memory_current_scene
+    return in_memory_current_scene
+
+
+@app.post("/api/v1/scenes/export")
+def export_scene_endpoint(scene: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    [ZH] 导出 3D 场景为标准格式化 scene.json。
+    [EN] Export 3D scene into standardized, formatted scene.json.
+    """
+    global in_memory_current_scene
+    target_scene = scene if scene is not None else in_memory_current_scene
+    return {
+        "status": "success",
+        "scene": target_scene,
+        "json_str": json.dumps(target_scene, indent=2, ensure_ascii=False),
+    }
+
+
+@app.post("/api/v1/scenes/import")
+async def import_scene_endpoint(scene: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    [ZH] 导入并反序列化验证 scene.json，重构三维虚拟竞技场。
+    [EN] Import and deserialize scene.json, validating required schema constraints.
+    """
+    global in_memory_current_scene
+    required_fields = ["version", "world", "terrain", "obstacles"]
+    for f in required_fields:
+        if f not in scene:
+            raise HTTPException(status_code=400, detail=f"Missing required scene field: '{f}'")
+
+    in_memory_current_scene = scene
+    scene_name = scene.get("metadata", {}).get("name", "unnamed_scene")
+    logger.info(f"Imported 3D scene: {scene_name}")
+
+    # 向所有活跃 WebSocket 客户端广播场景重塑事件
+    await manager.broadcast({
+        "type": "scene_loaded",
+        "scene": scene,
+    })
+
+    return {
+        "status": "success",
+        "message": "Scene imported and broadcasted successfully",
+        "scene_name": scene_name,
+        "obstacle_count": len(scene.get("obstacles", [])),
+    }
+
+
+@app.post("/api/v1/scenes/save")
+def save_scene_endpoint(scene: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    [ZH] 保存 3D 场景至云端存储。
+    [EN] Save 3D scene configuration to cloud repository.
+    """
+    global in_memory_current_scene
+    in_memory_current_scene = scene
+    return {
+        "status": "saved",
+        "name": scene.get("metadata", {}).get("name", "unnamed_scene"),
+        "timestamp": time.time(),
+    }
+
+
+@app.post("/api/v1/assets/upload")
+def upload_asset_endpoint(asset: AssetUploadPayload) -> Dict[str, Any]:
+    """
+    [ZH] 上传外部 3D 模型资产 (.obj, .stl, .glb, .gltf) 并严格校验格式与体积。
+    [EN] Upload external 3D mesh model with format and size validation.
+    """
+    valid_exts = {".obj", ".stl", ".glb", ".gltf"}
+    ext = os.path.splitext(asset.filename)[1].lower()
+    if ext not in valid_exts:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported format '{ext}'. Must be one of {valid_exts}",
+        )
+
+    # 校验文件大小 (上限 20MB)
+    max_bytes = 20 * 1024 * 1024
+    size_bytes = 0
+    if asset.content_base64:
+        import base64
+        try:
+            raw_data = base64.b64decode(asset.content_base64)
+            size_bytes = len(raw_data)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid base64 encoding: {e}")
+    elif asset.content_text:
+        size_bytes = len(asset.content_text.encode("utf-8"))
+
+    if size_bytes > max_bytes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File size {size_bytes / (1024*1024):.2f}MB exceeds limit of 20MB",
+        )
+
+    return {
+        "status": "valid",
+        "filename": asset.filename,
+        "format": ext[1:],
+        "size_bytes": size_bytes,
+        "message": f"Asset '{asset.filename}' uploaded and validated successfully",
+    }
 
 
 # ------------------------------------------------------------------------------
