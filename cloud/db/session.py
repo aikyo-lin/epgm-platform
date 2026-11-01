@@ -70,16 +70,26 @@ SessionLocal = sessionmaker(
 
 def init_db() -> None:
     """
-    [ZH] 自动初始化并创建所有未就绪的数据表。
-    [EN] Initialize and create all missing database tables.
+    [ZH] 自动初始化并创建所有未就绪的数据表 (若 PostgreSQL 离线则无缝降级至本地 SQLite)。
+    [EN] Initialize and create all missing database tables (fallback to SQLite if Postgres offline).
     """
+    global engine, SessionLocal, DATABASE_URL, is_sqlite
     try:
         logger.info(f"Initializing database tables using engine: {engine.url}")
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables initialized successfully.")
     except Exception as e:
-        logger.error(f"Failed to initialize database tables: {e}", exc_info=True)
-        raise
+        if not is_sqlite:
+            logger.warning(f"PostgreSQL connection failed ({e}). Falling back to local SQLite: epgm_knowledge.db")
+            DATABASE_URL = "sqlite:///epgm_knowledge.db"
+            is_sqlite = True
+            engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+            SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, expire_on_commit=False)
+            Base.metadata.create_all(bind=engine)
+            logger.info("Local SQLite database tables initialized successfully.")
+        else:
+            logger.error(f"Failed to initialize database tables: {e}", exc_info=True)
+            raise
 
 
 @contextmanager

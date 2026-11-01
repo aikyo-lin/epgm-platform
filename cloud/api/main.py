@@ -26,6 +26,8 @@ import redis
 import redis.asyncio as aioredis
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 # 导入数据库模块
@@ -378,6 +380,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 挂载 Web 3D 仪表盘静态资源
+dashboard_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "dashboard"))
+if os.path.exists(dashboard_dir):
+    app.mount("/static", StaticFiles(directory=dashboard_dir), name="static")
+
+    @app.get("/")
+    def serve_dashboard_root():
+        """直接访问根路径展示 Web 3D 数字孪生与因果拓扑大屏"""
+        return FileResponse(os.path.join(dashboard_dir, "index.html"))
 
 
 # ------------------------------------------------------------------------------
