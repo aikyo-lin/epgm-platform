@@ -313,28 +313,52 @@
   function onTelemetryReceived(msg) {
     if (!msg) return;
 
-    const pose = msg.pose;
-    const dynamics = msg.dynamics || {};
-    const data = msg.data || {};
+    const pose = msg.pose || (msg.data && msg.data.pose);
+    const dynamics = msg.dynamics || (msg.data && msg.data.dynamics) || {};
+    const data = msg.data || msg;
 
     // 1. 处理 3D 位姿数据 (x, y, z, roll, pitch, yaw, quaternion)
     if (pose) {
-      const px = parseFloat(pose.x || 0.0);
-      const py = parseFloat(pose.y !== undefined ? pose.y : 0.04);
-      const pz = parseFloat(pose.z || 0.0);
+      // [ZH] PyBullet (Z-Up: X-前/东, Y-左/北, Z-高) 到 Three.js (Y-Up: X-前/东, Y-高, Z-向外/南, -Z-北) 真实基底变换:
+      //      x_three = x_bullet
+      //      y_three = z_bullet
+      //      z_three = -y_bullet
+      // [EN] PyBullet (Z-Up) to Three.js (Y-Up) basis transformation:
+      //      x_t = x_b, y_t = z_b, z_t = -y_b
+      const rawX = parseFloat(pose.x !== undefined ? pose.x : 0.0);
+      const rawY = parseFloat(pose.y !== undefined ? pose.y : 0.0);
+      const rawZ = parseFloat(pose.z !== undefined ? pose.z : 0.04);
+
+      const px = rawX;
+      const py = rawZ;
+      const pz = -rawY;
 
       targetPose.position = new THREE.Vector3(px, py, pz);
 
       if (pose.quaternion && Array.isArray(pose.quaternion) && pose.quaternion.length === 4) {
+        // [ZH] 四元数基底变换: q_three = q_M * q_bullet * q_M^-1
+        //      其中 q_M = R_x(-90 deg) 对应: qx_t = qx_b, qy_t = qz_b, qz_t = -qy_b, qw_t = qw_b
+        //      确保 PyBullet Z 轴偏航映射到 Three.js 垂直 Y 轴偏航，且俯仰与滚转不发生翻侧倒置
+        // [EN] Quaternion basis conversion under M = Rx(-90 deg):
+        //      qx_t = qx_b, qy_t = qz_b, qz_t = -qy_b, qw_t = qw_b
         targetPose.quaternion = new THREE.Quaternion(
           pose.quaternion[0],
-          pose.quaternion[1],
           pose.quaternion[2],
+          -pose.quaternion[1],
           pose.quaternion[3]
         ).normalize();
       } else if (pose.yaw !== undefined) {
-        const euler = new THREE.Euler(pose.roll || 0, pose.yaw || 0, pose.pitch || 0, 'YXZ');
-        targetPose.quaternion = new THREE.Quaternion().setFromEuler(euler);
+        // [ZH] 欧拉角回退: 在 PyBullet 空间顺序合成后经基底变换投影至 Three.js
+        // [EN] Euler angle fallback under identical basis transformation:
+        const qEulerPyBullet = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(pose.roll || 0, pose.pitch || 0, pose.yaw || 0, 'XYZ')
+        );
+        targetPose.quaternion = new THREE.Quaternion(
+          qEulerPyBullet.x,
+          qEulerPyBullet.z,
+          -qEulerPyBullet.y,
+          qEulerPyBullet.w
+        ).normalize();
       }
 
       if (!hasReceivedFirstPose) {

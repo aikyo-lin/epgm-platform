@@ -127,6 +127,21 @@ uint16_t epgm_quantize_stateful(
 // 推理与突触可塑性更新
 // ==============================================================================
 
+/**
+ * [ZH] 基于当前事件状态执行动作推理与贝叶斯主动探索决策 (Q8.8 定点数运算)。
+ *      严格防止 32 位无符号整数溢出回绕导致的硬件级除零异常 (NUM-04 / wrap-to-zero)。
+ * [EN] Action inference and active inference decision under current event (Q8.8 fixed-point).
+ *      Defensively guards against 32-bit unsigned integer wrap-to-zero hardware division trap.
+ *
+ * 数学公式 / Mathematical Formulation:
+ *      Score(a) = (1 / M) * sum_{e in Matches} R(e) - (10.0 if Hazard else 0.0) + Curiosity(min_obs)
+ *      Curiosity(min_obs) = (256 * 2) / (min_obs + 1),  for min_obs < 0xFFFFFFFF
+ *                           0,                          for min_obs == 0xFFFFFFFF
+ *
+ * @param rt            只读 EPGM 运行时上下文指针 / Pointer to read-only runtime context
+ * @param current_event 当前感觉事件基元 ID / Current sensory event primitive ID
+ * @return              最优离散动作索引 a in [0, EPGM_ACTION_DIM - 1] / Optimal action index
+ */
 uint8_t epgm_infer_action(const epgm_runtime_t *rt, uint16_t current_event) {
     if (!rt) return 0;
 
@@ -169,7 +184,13 @@ uint8_t epgm_infer_action(const epgm_runtime_t *rt, uint16_t current_event) {
             }
 
             // 好奇心探索奖励：以最小观测次数激励充分探索
-            int32_t curiosity_bonus = (256 * 2) / (min_obs + 1);
+            // [防御加固]: 防范 32 位无符号整数 min_obs == 0xFFFFFFFF 时加 1 溢出回绕为 0 的硬件除零异常 (NUM-04)
+            // [Defensive Hardening]: Guard against 32-bit wrap-to-zero when min_obs == 0xFFFFFFFF
+            int32_t curiosity_bonus = 0;
+            if (min_obs < 0xFFFFFFFFUL) {
+                uint32_t safe_denom = min_obs + 1;
+                curiosity_bonus = (int32_t)((256 * 2) / safe_denom);
+            }
             score += curiosity_bonus;
         } else {
             // 若动作为完全未探索状态，赋予高好奇心激励

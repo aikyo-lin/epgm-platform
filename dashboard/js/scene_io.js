@@ -37,8 +37,8 @@
       world: { gravity: [0.0, 0.0, -9.81], timestep: 0.005, substeps: 4, arena_size: [10.0, 10.0, 3.0] },
       terrain: { type: "heightmap", resolution: [16, 16], horizontal_scale: [0.2, 0.2], vertical_scale: 0.5, data: Array(16).fill(null).map(() => Array(16).fill(0.0)) },
       obstacles: [
-        { id: "pillar_center", type: "pillar", position: [0.0, 0.0, 2.5], orientation_yaw: 0.0, params: { radius: 0.4, height: 1.0 } },
-        { id: "goal_01", type: "goal", position: [0.0, 0.0, 4.0], orientation_yaw: 0.0, params: {} }
+        { id: "pillar_center", type: "pillar", position: [0.0, 2.5, 0.0], orientation_yaw: 0.0, params: { radius: 0.4, height: 1.0 } },
+        { id: "goal_01", type: "goal", position: [0.0, 4.0, 0.0], orientation_yaw: 0.0, params: {} }
       ],
       custom_assets: [],
       robot_spawns: [{ sim_id: "sim_bot_01", config_file: "robot_config.json", position: [0.0, 0.0, 0.1], orientation_yaw: 0.0 }]
@@ -49,12 +49,12 @@
       world: { gravity: [0.0, 0.0, -9.81], timestep: 0.005, substeps: 4, arena_size: [10.0, 10.0, 3.0] },
       terrain: { type: "heightmap", resolution: [16, 16], horizontal_scale: [0.2, 0.2], vertical_scale: 0.5, data: Array(16).fill(null).map(() => Array(16).fill(0.0)) },
       obstacles: [
-        { id: "stairs_01", type: "stairs", position: [2.5, 0.0, 1.0], orientation_yaw: 0.0, params: { step_count: 5, step_width: 1.4, step_height: 0.05, step_depth: 0.22 } },
-        { id: "ramp_01", type: "ramp", position: [-2.5, 0.0, 1.0], orientation_yaw: 1.57, params: { length: 3.0, width: 1.5, slope_deg: 18.0, friction: 0.8 } },
-        { id: "goal_01", type: "goal", position: [2.5, 0.25, 2.5], orientation_yaw: 0.0, params: {} }
+        { id: "stairs_01", type: "stairs", position: [2.5, 1.0, 0.0], orientation_yaw: 0.0, params: { step_count: 5, step_width: 1.4, step_height: 0.05, step_depth: 0.22 } },
+        { id: "ramp_01", type: "ramp", position: [-2.5, 1.0, 0.0], orientation_yaw: 1.57, params: { length: 3.0, width: 1.5, slope_deg: 18.0, friction: 0.8 } },
+        { id: "goal_01", type: "goal", position: [2.5, 2.5, 0.25], orientation_yaw: 0.0, params: {} }
       ],
       custom_assets: [],
-      robot_spawns: [{ sim_id: "sim_bot_01", config_file: "robot_config.json", position: [0.0, 0.0, -2.0], orientation_yaw: 0.0 }]
+      robot_spawns: [{ sim_id: "sim_bot_01", config_file: "robot_config.json", position: [0.0, -2.0, 0.1], orientation_yaw: 0.0 }]
     },
     overpass_maze: {
       version: "1.0.0",
@@ -62,12 +62,12 @@
       world: { gravity: [0.0, 0.0, -9.81], timestep: 0.005, substeps: 4, arena_size: [10.0, 10.0, 3.0] },
       terrain: { type: "heightmap", resolution: [16, 16], horizontal_scale: [0.2, 0.2], vertical_scale: 0.5, data: Array(16).fill(null).map(() => Array(16).fill(0.0)) },
       obstacles: [
-        { id: "bridge_01", type: "bridge", position: [0.0, 0.0, 1.5], orientation_yaw: 0.0, params: { span: 4.0, width: 1.2, clearance: 0.65, ramp_slope_deg: 15.0 } },
-        { id: "corridor_01", type: "corridor", position: [-3.0, 0.0, -1.5], orientation_yaw: 0.0, params: { wall_height: 0.6, corridor_width: 1.0 } },
-        { id: "pillar_left", type: "pillar", position: [3.0, 0.0, -1.0], orientation_yaw: 0.0, params: { radius: 0.35, height: 0.8 } }
+        { id: "bridge_01", type: "bridge", position: [0.0, 1.5, 0.0], orientation_yaw: 0.0, params: { span: 4.0, width: 1.2, clearance: 0.65, ramp_slope_deg: 15.0 } },
+        { id: "corridor_01", type: "corridor", position: [-3.0, -1.5, 0.0], orientation_yaw: 0.0, params: { wall_height: 0.6, corridor_width: 1.0 } },
+        { id: "pillar_left", type: "pillar", position: [3.0, -1.0, 0.0], orientation_yaw: 0.0, params: { radius: 0.35, height: 0.8 } }
       ],
       custom_assets: [],
-      robot_spawns: [{ sim_id: "sim_bot_01", config_file: "robot_config.json", position: [0.0, 0.0, -3.0], orientation_yaw: 0.0 }]
+      robot_spawns: [{ sim_id: "sim_bot_01", config_file: "robot_config.json", position: [0.0, -3.0, 0.1], orientation_yaw: 0.0 }]
     },
     rugged_heightmap: {
       version: "1.0.0",
@@ -92,11 +92,11 @@
         })()
       },
       obstacles: [
-        { id: "rock_pillar", type: "pillar", position: [2.0, 0.0, 2.0], orientation_yaw: 0.0, params: { radius: 0.4, height: 0.9 } },
-        { id: "goal_01", type: "goal", position: [0.0, 0.3, 0.0], orientation_yaw: 0.0, params: {} }
+        { id: "rock_pillar", type: "pillar", position: [2.0, 2.0, 0.0], orientation_yaw: 0.0, params: { radius: 0.4, height: 0.9 } },
+        { id: "goal_01", type: "goal", position: [0.0, 0.0, 0.3], orientation_yaw: 0.0, params: {} }
       ],
       custom_assets: [],
-      robot_spawns: [{ sim_id: "sim_bot_01", config_file: "robot_config.json", position: [-3.0, 0.0, -3.0], orientation_yaw: 0.0 }]
+      robot_spawns: [{ sim_id: "sim_bot_01", config_file: "robot_config.json", position: [-3.0, -3.0, 0.1], orientation_yaw: 0.0 }]
     }
   };
 
@@ -110,11 +110,22 @@
       const registry = window.EditorTools.getRegistry();
       for (const id in registry) {
         const item = registry[id];
+        // [ZH] Three.js (Y-Up: x_t, y_t, z_t) 逆变换为 PyBullet (Z-Up: x_b, y_b, z_b) 空间坐标:
+        //      x_bullet = x_three
+        //      y_bullet = -z_three
+        //      z_bullet = y_three
+        // [EN] Convert Three.js (Y-Up) back to PyBullet (Z-Up) basis:
+        //      x_b = x_t, y_b = -z_t, z_b = y_t
+        const posX = item.mesh ? item.mesh.position.x : item.position[0];
+        const posY = item.mesh ? item.mesh.position.y : item.position[1];
+        const posZ = item.mesh ? item.mesh.position.z : item.position[2];
+        const yaw = item.mesh ? item.mesh.rotation.y : (item.orientation_yaw || 0.0);
+
         obstaclesList.push({
           id: item.id,
           type: item.type,
-          position: [item.position[0], item.position[1], item.position[2]],
-          orientation_yaw: item.orientation_yaw || 0.0,
+          position: [posX, -posZ, posY],
+          orientation_yaw: yaw,
           params: item.params || {}
         });
       }
@@ -151,7 +162,7 @@
         {
           sim_id: "sim_bot_01",
           config_file: "robot_config.json",
-          position: [spawnPose.x, spawnPose.y, spawnPose.z],
+          position: [spawnPose.x, -spawnPose.z, spawnPose.y],
           orientation_yaw: (spawnPose.yawDeg * Math.PI) / 180.0
         }
       ]
@@ -258,7 +269,12 @@
         const mesh = window.EditorTools.createObstacleMesh(obs.type, obs.params);
         if (mesh) {
           const pos = obs.position || [0, 0, 0];
-          mesh.position.set(pos[0], pos[1], pos[2]);
+          // [ZH] PyBullet (Z-Up: x_b, y_b, z_b) 映射至 Three.js (Y-Up: x_t = x_b, y_t = z_b, z_t = -y_b)
+          // [EN] Map PyBullet (Z-Up) to Three.js (Y-Up: x_t = x_b, y_t = z_b, z_t = -y_b)
+          const px = pos[0];
+          const py = pos[2];
+          const pz = -pos[1];
+          mesh.position.set(px, py, pz);
           if (obs.orientation_yaw) {
             mesh.rotation.y = obs.orientation_yaw;
           }
@@ -269,7 +285,7 @@
           registry[obs.id] = {
             id: obs.id,
             type: obs.type,
-            position: [pos[0], pos[1], pos[2]],
+            position: [px, py, pz],
             orientation_yaw: obs.orientation_yaw || 0.0,
             mesh: mesh,
             params: obs.params || {}
@@ -281,9 +297,11 @@
     // 4. 重置出生点位姿
     if (data.robot_spawns && data.robot_spawns.length > 0 && window.EditorTools) {
       const sp = data.robot_spawns[0];
-      const pos = sp.position || [0, 0.15, 0];
+      const pos = sp.position || [0, 0, 0.1];
       const yawDeg = (sp.orientation_yaw || 0.0) * (180.0 / Math.PI);
-      window.EditorTools.setSpawnPose(pos[0], pos[1], pos[2], yawDeg);
+      // [ZH] 出生点基底变换: x_t = x_b, y_t = z_b, z_t = -y_b
+      // [EN] Spawn pose basis transformation: x_t = x_b, y_t = z_b, z_t = -y_b
+      window.EditorTools.setSpawnPose(pos[0], pos[2], -pos[1], yawDeg);
     }
 
     console.log(`[SceneIO] Successfully reconstructed scene: ${data.metadata ? data.metadata.name : 'Custom Scene'}`);

@@ -323,6 +323,8 @@ class EPGMMQTTBridge:
         last_action = int(data.get("last_action", 0))
         last_reward = float(data.get("last_reward", 0.0))
         sensor_distances = data.get("sensor_distances", [])
+        pose = data.get("pose")
+        dynamics = data.get("dynamics")
 
         # ----------------------------------------------------------------------
         # 1. 刷新 Redis 实时热点缓存
@@ -330,41 +332,58 @@ class EPGMMQTTBridge:
         try:
             live_key = f"epgm:robot:{robot_id}:live"
             pipe = self.redis_client.pipeline()
+            live_mapping = {
+                "robot_id": robot_id,
+                "last_seen": now_ms,
+                "battery": battery,
+                "bumper_hit": int(bumper),
+                "current_event": event_id,
+                "last_action": last_action,
+                "last_reward": str(last_reward),
+                "sensor_distances": json.dumps(sensor_distances),
+            }
+            if pose is not None:
+                live_mapping["pose"] = json.dumps(pose)
+            if dynamics is not None:
+                live_mapping["dynamics"] = json.dumps(dynamics)
             pipe.hset(
                 live_key,
-                mapping={
-                    "robot_id": robot_id,
-                    "last_seen": now_ms,
-                    "battery": battery,
-                    "bumper_hit": int(bumper),
-                    "current_event": event_id,
-                    "last_action": last_action,
-                    "last_reward": str(last_reward),
-                    "sensor_distances": json.dumps(sensor_distances),
-                },
+                mapping=live_mapping,
             )
             pipe.expire(live_key, 60)  # 60 秒 TTL 自动淘汰失联节点
 
             # 更新活跃机器人有序集合 (score 为时间戳)
             pipe.zadd("epgm:fleet:active_robots", {robot_id: time.time()})
 
-            # 发布轻量实时广播消息给 FastAPI WebSocket Hub
+            # 发布轻量实时广播消息给 FastAPI WebSocket Hub (含 3D 空间位姿与动力学参数)
+            telemetry_data = {
+                "robot_id": robot_id,
+                "battery_percentage": battery,
+                "bumper_hit": bumper,
+                "current_event_id": event_id,
+                "last_action": last_action,
+                "last_reward": last_reward,
+                "sensor_distances": sensor_distances,
+            }
+            if pose is not None:
+                telemetry_data["pose"] = pose
+            if dynamics is not None:
+                telemetry_data["dynamics"] = dynamics
+
+            pub_payload = {
+                "type": "telemetry_update",
+                "robot_id": robot_id,
+                "timestamp_ms": timestamp_ms,
+                "data": telemetry_data,
+            }
+            if pose is not None:
+                pub_payload["pose"] = pose
+            if dynamics is not None:
+                pub_payload["dynamics"] = dynamics
+
             pipe.publish(
                 "epgm:channel:telemetry",
-                json.dumps({
-                    "type": "telemetry_update",
-                    "robot_id": robot_id,
-                    "timestamp_ms": timestamp_ms,
-                    "data": {
-                        "robot_id": robot_id,
-                        "battery_percentage": battery,
-                        "bumper_hit": bumper,
-                        "current_event_id": event_id,
-                        "last_action": last_action,
-                        "last_reward": last_reward,
-                        "sensor_distances": sensor_distances,
-                    },
-                }),
+                json.dumps(pub_payload),
             )
             pipe.execute()
         except Exception as e:

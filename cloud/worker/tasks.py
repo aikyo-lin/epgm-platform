@@ -29,6 +29,7 @@ import logging
 from typing import Dict, Any, List, Optional, Union
 
 import redis
+import numpy as np
 from celery import Celery
 
 # 引入数据库会话与模型
@@ -91,9 +92,25 @@ def _recompute_posterior_probabilities(
 ) -> None:
     """
     [ZH] 针对特定 (source_event, action) 条件分支，利用狄利克雷-多项分布共轭规则
-         重新归一化计算所有目标后继事件的后验转移概率 P*(v_j | v_i, a)。
+         重新归一化计算所有目标后继事件的后验转移概率 P*(v_j | v_i, a)，
+         并严格保全柯尔莫哥洛夫概率单纯形公理 (sum P == 1.0000)。
     [EN] Recompute posterior transition probabilities using Dirichlet-Multinomial
-         conjugate rule for specific (source_event, action) conditional branch.
+         conjugate rule for specific (source_event, action) conditional branch,
+         ensuring strict probability simplex normalization (sum P == 1.0000).
+
+    数学公式 / Mathematical Formulation:
+        1. 狄利克雷共轭后验期望 / Posterior Predictive Expectation:
+           P*(v_j | v_i, a) = (alpha_0 + N(v_i, a, v_j)) / sum_{m=1}^K (alpha_0 + N(v_i, a, v_m))
+        2. 概率单纯形残差消除 / Probability Simplex Residual Correction:
+           r = 1.0 - sum_{j=1}^K round(P_j, 4)
+           P_{max} <- round(P_{max} + r, 4)
+           确保 sum_{j=1}^K P_j == 1.0000，杜绝下游采样器 (如 np.random.choice) 抛出 ValueError。
+
+    Args:
+        edges_dict: 全局或局部因果图边字典 / Global or local edges dictionary
+        source_event: 源状态事件 ID / Source event ID v_i
+        action: 离散控制动作索引 / Discrete action index a
+        alpha_0: 对称狄利克雷先验浓度系数 / Symmetric Dirichlet prior hyperparameter
     """
     prefix = f"{source_event}_{action}_"
     branch_edges = [edge for key, edge in edges_dict.items() if key.startswith(prefix)]
@@ -101,12 +118,34 @@ def _recompute_posterior_probabilities(
     if not branch_edges:
         return
 
-    # 分母：sum_m (alpha_0 + N_m)
-    total_denominator = len(branch_edges) * alpha_0 + sum(e["observation_count"] for e in branch_edges)
+    # 安全计算分母，防御 alpha_0 <= 0 且观测数为 0 时的除零异常
+    counts = [max(0, int(e.get("observation_count", 0))) for e in branch_edges]
+    k_branches = len(branch_edges)
+    effective_alpha = max(1e-6, float(alpha_0))
+    total_denominator = k_branches * effective_alpha + sum(counts)
 
-    for edge in branch_edges:
-        numerator = alpha_0 + edge["observation_count"]
-        edge["probability"] = round(numerator / total_denominator, 4)
+    if total_denominator <= 0.0:
+        uniform_p = round(1.0 / k_branches, 4)
+        for edge in branch_edges:
+            edge["probability"] = uniform_p
+        diff = round(1.0 - sum(e["probability"] for e in branch_edges), 4)
+        if diff != 0.0:
+            branch_edges[0]["probability"] = round(branch_edges[0]["probability"] + diff, 4)
+        return
+
+    # 计算连续浮点概率并四舍五入保留 4 位小数
+    raw_probs = [(effective_alpha + c) / total_denominator for c in counts]
+    rounded_probs = [round(p, 4) for p in raw_probs]
+
+    # 计算截断舍入残差: residual = 1.0 - sum(rounded_probs)
+    residual = round(1.0 - sum(rounded_probs), 4)
+    if abs(residual) > 1e-6:
+        # 将微小残差补偿给概率最大的主导边，消除单纯形破损
+        max_idx = int(np.argmax(rounded_probs))
+        rounded_probs[max_idx] = round(rounded_probs[max_idx] + residual, 4)
+
+    for edge, p in zip(branch_edges, rounded_probs):
+        edge["probability"] = max(0.0, min(1.0, float(p)))
 
 
 @app.task(name="tasks.fuse_graph_deltas")
@@ -426,9 +465,21 @@ def prune_global_graph() -> Dict[str, Any]:
             if obs < 2 and conf < 0.15 and (current_step - last_active > 200):
                 keys_to_delete.append(key)
 
+        affected_branches_after_prune = set()
         for k in keys_to_delete:
+            parts = k.split("_")
+            if len(parts) >= 2:
+                try:
+                    affected_branches_after_prune.add((int(parts[0]), int(parts[1])))
+                except ValueError:
+                    pass
             del edges_dict[k]
             pruned_edges += 1
+
+        # [ZH] 对剪枝受影响的分支执行概率重新归一化，保全柯尔莫哥洛夫条件概率公理 (sum P == 1.0)
+        # [EN] Recompute posterior probabilities for remaining edges in affected branches to ensure sum == 1.0
+        for src, act in affected_branches_after_prune:
+            _recompute_posterior_probabilities(edges_dict, src, act, DIRICHLET_ALPHA_0)
 
         # ----------------------------------------------------------------------
         # 2. 剪除完全孤立的非核心事件节点 (保留 ID:0 物理碰撞)

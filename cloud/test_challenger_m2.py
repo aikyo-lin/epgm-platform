@@ -404,9 +404,9 @@ class TestBayesianFusionNumericalStability(unittest.TestCase):
             # 验证在宽松容差下吻合
             self.assertAlmostEqual(total_p, 1.0, delta=0.005)
 
-        # 确实验证了 K=3, 6, 7, 9 下因独立四位截断存在非零残差 (0.9999 或 1.0003)
-        self.assertNotEqual(discrepancies[3], 1.0, "K=3 branching exhibits 0.9999 rounding artifact")
-        self.assertNotEqual(discrepancies[7], 1.0, "K=7 branching exhibits 1.0003 rounding artifact")
+        # [加固验证]: 验证狄利克雷单纯形归一化修复生效，各分支概率和严格等于 1.0000
+        self.assertEqual(discrepancies[3], 1.0, "K=3 branching satisfies exact 1.0 simplex sum")
+        self.assertEqual(discrepancies[7], 1.0, "K=7 branching satisfies exact 1.0 simplex sum")
 
     def test_downstream_sampler_crash_on_unnormalized_probabilities(self):
         """
@@ -639,9 +639,9 @@ class TestLTDGraphPruningEdgeCases(unittest.TestCase):
             updated = json.loads(self.mock_redis.get("epgm:graph:global:latest"))
             remaining_edge = updated["edges"]["10_1_20"]
 
-            # 审计发现: 剩下的唯一边 10_1_20 概率仍为旧值 0.8，而非理论上唯一的 1.0!
-            print(f"[AUDIT FINDING] Residual edge probability after pruning is {remaining_edge['probability']} (Expected 1.0 if recomputed)")
-            self.assertEqual(remaining_edge["probability"], 0.8, "Demonstrates un-normalized residual probability")
+            # [加固验证]: 验证 LTD 剪枝后触发 _recompute_posterior_probabilities 重新归一化至 1.0
+            print(f"[REMEDIATION VERIFIED] Residual edge probability after pruning is {remaining_edge['probability']} (Expected 1.0)")
+            self.assertEqual(remaining_edge["probability"], 1.0, "Verifies LTD pruning re-normalization")
 
 
 class TestCeleryGraphFusionEndToEndDefense(unittest.TestCase):

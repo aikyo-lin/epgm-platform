@@ -170,7 +170,14 @@ void TaskNetwork(void *pvParameters) {
             doc["battery_percentage"] = rx_packet.battery_percentage;
             doc["bumper_hit"] = (rx_packet.bumper_state != 0);
 
-            char buffer[256];
+            // [ZH] 序列化 8 路空间雷达测距读数 (mm) 对齐全链路遥测 JSON Schema
+            // [EN] Serialize 8-channel distance readings (mm) to align with telemetry JSON schema
+            JsonArray dist_array = doc["sensor_distances"].to<JsonArray>();
+            for (int i = 0; i < 8; ++i) {
+                dist_array.add(rx_packet.sensor_distances[i]);
+            }
+
+            char buffer[512];
             size_t len = serializeJson(doc, buffer);
             g_mqtt_client.publish(topic_telemetry, buffer, len);
         }
